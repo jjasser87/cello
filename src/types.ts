@@ -69,6 +69,7 @@ export interface WorkspaceState {
   cells: Cell[]
   activeCellId: string
   activePanel: PanelId
+  sidePanelOpen: boolean
   history: HistoryEntry[]
   historyIndex: number
   plots: PlotSpec[]

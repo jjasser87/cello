@@ -47,6 +47,7 @@ function buildInitial(): WorkspaceState {
       ? saved.activeCellId
       : cells[0].id,
     activePanel: saved?.activePanel ?? 'cells',
+    sidePanelOpen: false,
     history: [],
     historyIndex: -1,
     plots: [],
@@ -69,6 +70,7 @@ export function useWorkspace() {
       cells: state.cells,
       activeCellId: state.activeCellId,
       activePanel: state.activePanel,
+      sidePanelOpen: false,
       scriptPath: state.scriptPath,
       history: [] as WorkspaceState['history'],
       historyIndex: -1,
@@ -95,7 +97,20 @@ export function useWorkspace() {
   const scriptText = useMemo(() => cellsToScript(state.cells), [state.cells])
 
   const setPanel = useCallback((panel: PanelId) => {
-    setState((prev) => ({ ...prev, activePanel: panel }))
+    setState((prev) => ({ ...prev, activePanel: panel, sidePanelOpen: true }))
+  }, [])
+
+  const toggleSidePanel = useCallback((panel: PanelId) => {
+    setState((prev) => {
+      if (prev.sidePanelOpen && prev.activePanel === panel) {
+        return { ...prev, sidePanelOpen: false }
+      }
+      return { ...prev, activePanel: panel, sidePanelOpen: true }
+    })
+  }, [])
+
+  const collapseSidePanel = useCallback(() => {
+    setState((prev) => ({ ...prev, sidePanelOpen: false }))
   }, [])
 
   const selectCell = useCallback((cellId: string, panel?: PanelId) => {
@@ -103,6 +118,7 @@ export function useWorkspace() {
       ...prev,
       activeCellId: cellId,
       activePanel: panel ?? prev.activePanel,
+      sidePanelOpen: panel ? true : prev.sidePanelOpen,
     }))
   }, [])
 
@@ -135,7 +151,13 @@ export function useWorkspace() {
         : prev.cells.length - 1
       const next = [...prev.cells]
       next.splice(index + 1, 0, cell)
-      return { ...prev, cells: next, activeCellId: cell.id, activePanel: 'cells' }
+      return {
+        ...prev,
+        cells: next,
+        activeCellId: cell.id,
+        activePanel: 'cells',
+        sidePanelOpen: true,
+      }
     })
   }, [])
 
@@ -200,9 +222,17 @@ export function useWorkspace() {
         const tables = result.table ? [...prev.tables, result.table] : prev.tables
         const history = [...prev.history, historyEntry]
         let activePanel = prev.activePanel
-        if (result.plot) activePanel = 'plot'
-        else if (result.table) activePanel = 'data'
-        else if (result.error) activePanel = 'history'
+        let sidePanelOpen = prev.sidePanelOpen
+        if (result.plot) {
+          activePanel = 'plot'
+          sidePanelOpen = true
+        } else if (result.table) {
+          activePanel = 'data'
+          sidePanelOpen = true
+        } else if (result.error) {
+          activePanel = 'history'
+          sidePanelOpen = true
+        }
 
         return {
           ...prev,
@@ -229,6 +259,7 @@ export function useWorkspace() {
             ...(result.logs.length ? result.logs : [result.error ? `Error: ${result.error}` : '(no output)']),
           ].slice(-200),
           activePanel,
+          sidePanelOpen,
         }
       })
     },
@@ -303,7 +334,11 @@ export function useWorkspace() {
               ? 'plot'
               : result.table
                 ? 'data'
-                : working.activePanel,
+                : result.error
+                  ? 'history'
+                  : working.activePanel,
+            sidePanelOpen:
+              result.plot || result.table || result.error ? true : working.sidePanelOpen,
           }
           if (result.error) break
         }
@@ -353,6 +388,7 @@ export function useWorkspace() {
         ),
         activeCellId: entry.cellId,
         activePanel: 'cells',
+        sidePanelOpen: true,
       }
     })
   }, [])
@@ -375,6 +411,7 @@ export function useWorkspace() {
       activeTableId: null,
       consoleLines: ['Imported script with # %% cell markers.'],
       activePanel: 'cells',
+      sidePanelOpen: false,
     }))
   }, [])
 
@@ -383,6 +420,8 @@ export function useWorkspace() {
     activeCell,
     scriptText,
     setPanel,
+    toggleSidePanel,
+    collapseSidePanel,
     selectCell,
     updateActiveCode,
     renameCell,

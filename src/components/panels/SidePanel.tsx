@@ -3,46 +3,90 @@ import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { PanelId, ProjectFile } from '../../types'
 
+const RIBBON_ITEMS: { id: PanelId; label: string; short: string }[] = [
+  { id: 'cells', label: 'Cells', short: 'Ce' },
+  { id: 'history', label: 'History', short: 'Hi' },
+  { id: 'plot', label: 'Plot', short: 'Pl' },
+  { id: 'files', label: 'Files', short: 'Fi' },
+  { id: 'env', label: 'Env', short: 'En' },
+  { id: 'data', label: 'Data', short: 'Da' },
+  { id: 'structure', label: 'Flow', short: 'Fl' },
+  { id: 'ai', label: 'Agent', short: 'Ag' },
+]
+
 interface SidePanelProps {
   api: WorkspaceApi
 }
 
 export function SidePanel({ api }: SidePanelProps) {
-  const { state } = api
+  const { state, toggleSidePanel, collapseSidePanel } = api
+  const open = state.sidePanelOpen
+
   return (
-    <aside className="side-panel" aria-label={`${state.activePanel} panel`}>
-      <PanelHeader panel={state.activePanel} />
-      <div className="side-panel-body">
-        {state.activePanel === 'cells' && <CellsPanel api={api} />}
-        {state.activePanel === 'history' && <HistoryPanel api={api} />}
-        {state.activePanel === 'plot' && <PlotPanel api={api} />}
-        {state.activePanel === 'files' && <FilesPanel api={api} />}
-        {state.activePanel === 'env' && <EnvPanel api={api} />}
-        {state.activePanel === 'data' && <DataPanel api={api} />}
-        {state.activePanel === 'structure' && <StructurePanel api={api} />}
-        {state.activePanel === 'ai' && <AiPanel api={api} />}
-      </div>
-      <ConsoleDock lines={state.consoleLines} />
+    <aside
+      className={`side-shell ${open ? 'is-open' : 'is-collapsed'}`}
+      aria-label={open ? `${state.activePanel} panel` : 'Panel ribbon'}
+    >
+      {open ? (
+        <div className="side-panel">
+          <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
+          <div className="side-panel-body">
+            {state.activePanel === 'cells' && <CellsPanel api={api} />}
+            {state.activePanel === 'history' && <HistoryPanel api={api} />}
+            {state.activePanel === 'plot' && <PlotPanel api={api} />}
+            {state.activePanel === 'files' && <FilesPanel api={api} />}
+            {state.activePanel === 'env' && <EnvPanel api={api} />}
+            {state.activePanel === 'data' && <DataPanel api={api} />}
+            {state.activePanel === 'structure' && <StructurePanel api={api} />}
+            {state.activePanel === 'ai' && <AiPanel api={api} />}
+          </div>
+          <ConsoleDock lines={state.consoleLines} />
+        </div>
+      ) : null}
+
+      <nav className="side-ribbon" aria-label="Panel options">
+        {RIBBON_ITEMS.map((item) => {
+          const active = open && state.activePanel === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`ribbon-item ${active ? 'is-active' : ''}`}
+              aria-pressed={active}
+              title={item.label}
+              onClick={() => toggleSidePanel(item.id)}
+            >
+              <span className="ribbon-short">{item.short}</span>
+              <span className="ribbon-label">{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
     </aside>
   )
 }
 
-function PanelHeader({ panel }: { panel: PanelId }) {
+function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => void }) {
   const titles: Record<PanelId, { title: string; blurb: string }> = {
-    cells: { title: 'Cells', blurb: 'Order determines script flow. Drag mentally — use ↑↓ to reorder.' },
-    history: { title: 'History', blurb: 'Step through executions. Red left, green right.' },
-    plot: { title: 'Plot', blurb: 'Auto-opens when a cell calls cello.plot().' },
-    files: { title: 'Files', blurb: 'Project tree stub for the focused workspace.' },
-    env: { title: 'Environment', blurb: 'Bindings left behind by executed cells.' },
-    data: { title: 'Data', blurb: 'Tables from cello.table() — dataframe / CSV style preview.' },
-    structure: { title: 'Script flow', blurb: 'See where this cell sits without leaving focus mode.' },
-    ai: { title: 'Agent', blurb: 'Context-aware help. Suggests — never silently rewrites.' },
+    cells: { title: 'Cells', blurb: 'Order determines script flow.' },
+    history: { title: 'History', blurb: 'Red left, green right.' },
+    plot: { title: 'Plot', blurb: 'Opens when a cell plots.' },
+    files: { title: 'Files', blurb: 'Project tree.' },
+    env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
+    data: { title: 'Data', blurb: 'Tables from cello.table().' },
+    structure: { title: 'Script flow', blurb: 'Where this cell sits.' },
+    ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
   const copy = titles[panel]
   return (
     <div className="panel-header">
-      <h2>{copy.title}</h2>
-      <p>{copy.blurb}</p>
+      <div>
+        <h2>{copy.title}</h2>
+        <p>{copy.blurb}</p>
+      </div>
+      <button type="button" className="collapse-btn" onClick={onCollapse} title="Collapse panel">
+        Collapse
+      </button>
     </div>
   )
 }
@@ -152,9 +196,7 @@ function HistoryPanel({ api }: SidePanelProps) {
         </div>
       </div>
 
-      {entry.outputText ? (
-        <pre className="output-block">{entry.outputText}</pre>
-      ) : null}
+      {entry.outputText ? <pre className="output-block">{entry.outputText}</pre> : null}
       {entry.error ? <div className="cell-error">Error: {entry.error}</div> : null}
 
       <button type="button" className="primary wide" onClick={restoreHistoryCode}>
@@ -172,7 +214,7 @@ function PlotPanel({ api }: SidePanelProps) {
 
   if (!plot) {
     return (
-      <EmptyState text="No plots yet. Call cello.plot({ labels, values }) from a cell — this panel opens automatically." />
+      <EmptyState text="No plots yet. Call cello.plot({ labels, values }) — this panel opens automatically." />
     )
   }
 
@@ -214,8 +256,7 @@ function FilesPanel({ api }: SidePanelProps) {
   return (
     <div className="file-tree">
       <p className="muted small">
-        Active script: <code>{api.state.scriptPath}</code> (stored as plain text with{' '}
-        <code># %%</code> cells)
+        Active script: <code>{api.state.scriptPath}</code> (<code># %%</code> cells)
       </p>
       <FileNode nodes={api.state.files} depth={0} />
     </div>
@@ -241,7 +282,7 @@ function FileNode({ nodes, depth }: { nodes: ProjectFile[]; depth: number }) {
 function EnvPanel({ api }: SidePanelProps) {
   const { env } = api.state
   if (env.length === 0) {
-    return <EmptyState text="Environment is empty. Run cells to populate variables, tables, and helpers." />
+    return <EmptyState text="Environment is empty. Run cells to populate bindings." />
   }
   return (
     <table className="data-table env-table">
@@ -272,9 +313,7 @@ function DataPanel({ api }: SidePanelProps) {
     state.tables[state.tables.length - 1]
 
   if (!table) {
-    return (
-      <EmptyState text="No tables yet. Use cello.table(rows, 'name') to preview dataframes / CSV-like data." />
-    )
+    return <EmptyState text="No tables yet. Use cello.table(rows, 'name')." />
   }
 
   return (
@@ -332,10 +371,6 @@ function StructurePanel({ api }: SidePanelProps) {
           </li>
         ))}
       </ol>
-      <p className="muted small">
-        Dependency graphs come later. v0 shows execution order — the relationship that always
-        matters for a linear script.
-      </p>
     </div>
   )
 }
@@ -361,9 +396,9 @@ function AiPanel({ api }: SidePanelProps) {
         ? `Latest run status: ${state.history[state.history.length - 1]?.status}.`
         : 'No executions yet.',
       '',
-      'Suggestion (preview only — not applied): keep this cell focused on one transformation, and move plotting into the next cell so Flow stays readable.',
+      'Suggestion (preview only — not applied): keep this cell focused on one transformation.',
       '',
-      'Authorize changes explicitly when you want edits applied. This stub does not rewrite your script.',
+      'Authorize changes explicitly when you want edits applied.',
     ].join('\n')
 
     setThread((prev) => [...prev, { role: 'user', text: question }, { role: 'agent', text: reply }])
@@ -383,7 +418,7 @@ function AiPanel({ api }: SidePanelProps) {
         <input
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="Agent: what can I help you with?"
+          placeholder="What can I help you with?"
           onKeyDown={(event) => {
             if (event.key === 'Enter') send()
           }}
@@ -414,4 +449,3 @@ function formatCell(value: string | number | boolean | null | undefined) {
   if (typeof value === 'boolean') return value ? 'true' : 'false'
   return String(value)
 }
-

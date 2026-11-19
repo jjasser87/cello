@@ -98,8 +98,7 @@ export function CellEditor({
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">
-        Plain-text script cells use <code># %%</code> markers. Only the active cell stays in view —
-        open <strong>Flow</strong> or <strong>Cells</strong> when you need the bigger picture.
+        <code># %%</code> cells · ⌘/Ctrl+Enter to run · open the ribbon for Flow, History, Plot, and more
       </p>
     </section>
   )

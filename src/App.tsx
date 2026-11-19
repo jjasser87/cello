@@ -1,13 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { CellEditor } from './components/CellEditor'
 import { SidePanel } from './components/panels/SidePanel'
-import { TopNav } from './components/TopNav'
 import { useWorkspace } from './hooks/useWorkspace'
 
 export default function App() {
   const api = useWorkspace()
   const { state, activeCell, runCell } = api
-  const [navExpanded, setNavExpanded] = useState(true)
   const activeIndex = state.cells.findIndex((cell) => cell.id === activeCell.id)
 
   useEffect(() => {
@@ -23,43 +21,29 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="atmosphere" aria-hidden />
-      <TopNav
-        active={state.activePanel}
-        expanded={navExpanded}
-        onSelect={api.setPanel}
-        onToggleExpand={() => setNavExpanded((value) => !value)}
-      />
-
-      <div className={`workspace ${navExpanded ? 'nav-open' : ''}`}>
+      <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
         <main className="main-window">
-          <div className="main-meta">
-            <div>
-              <div className="eyebrow">Main window</div>
-              <h1>{activeCell.name}</h1>
-            </div>
-            <div className="main-actions">
-              <button type="button" onClick={api.runAll} title="Run all cells in order">
-                Run all
-              </button>
-              <button type="button" onClick={api.resetKernel}>
-                Reset kernel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const blob = new Blob([api.exportScript()], { type: 'text/plain' })
-                  const url = URL.createObjectURL(blob)
-                  const anchor = document.createElement('a')
-                  anchor.href = url
-                  anchor.download = state.scriptPath
-                  anchor.click()
-                  URL.revokeObjectURL(url)
-                }}
-              >
-                Export .js
-              </button>
-            </div>
+          <div className="main-actions">
+            <button type="button" onClick={api.runAll} title="Run all cells in order">
+              Run all
+            </button>
+            <button type="button" onClick={api.resetKernel}>
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const blob = new Blob([api.exportScript()], { type: 'text/plain' })
+                const url = URL.createObjectURL(blob)
+                const anchor = document.createElement('a')
+                anchor.href = url
+                anchor.download = state.scriptPath
+                anchor.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              Export
+            </button>
           </div>
 
           <CellEditor
