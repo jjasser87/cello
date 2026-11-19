@@ -172,12 +172,25 @@ export function useWorkspace() {
 
   const deleteCell = useCallback((cellId: string) => {
     setState((prev) => {
-      if (prev.cells.length <= 1) return prev
-      const cells = prev.cells.filter((cell) => cell.id !== cellId)
+      const remaining = prev.cells.filter((cell) => cell.id !== cellId)
+      // Deleting the last cell leaves a fresh untitled empty cell (new id).
+      const cells =
+        remaining.length === 0
+          ? [
+              {
+                id: createId('cell'),
+                name: 'Untitled',
+                code: '',
+                status: 'idle' as const,
+              },
+            ]
+          : remaining
+      const deletedIndex = prev.cells.findIndex((c) => c.id === cellId)
       const activeCellId =
         prev.activeCellId === cellId
-          ? cells[Math.max(0, prev.cells.findIndex((c) => c.id === cellId) - 1)]?.id ??
-            cells[0].id
+          ? remaining.length === 0
+            ? cells[0].id
+            : cells[Math.max(0, deletedIndex - 1)]?.id ?? cells[0].id
           : prev.activeCellId
       const history = prev.history.filter((entry) => entry.cellId !== cellId)
       const historyIndex =
