@@ -28,23 +28,7 @@ export function SidePanel({ api }: SidePanelProps) {
       className={`side-shell ${open ? 'is-open' : 'is-collapsed'}`}
       aria-label={open ? `${state.activePanel} panel` : 'Panel ribbon'}
     >
-      {open ? (
-        <div className="side-panel">
-          <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
-          <div className="side-panel-body">
-            {state.activePanel === 'cells' && <CellsPanel api={api} />}
-            {state.activePanel === 'history' && <HistoryPanel api={api} />}
-            {state.activePanel === 'plot' && <PlotPanel api={api} />}
-            {state.activePanel === 'files' && <FilesPanel api={api} />}
-            {state.activePanel === 'env' && <EnvPanel api={api} />}
-            {state.activePanel === 'data' && <DataPanel api={api} />}
-            {state.activePanel === 'structure' && <StructurePanel api={api} />}
-            {state.activePanel === 'console' && <ConsolePanel lines={state.consoleLines} />}
-            {state.activePanel === 'ai' && <AiPanel api={api} />}
-          </div>
-        </div>
-      ) : null}
-
+      {/* Ribbon stays flush against the cell; panels expand to its right. */}
       <nav className="side-ribbon" aria-label="Panel options">
         {RIBBON_ITEMS.map((item) => {
           const active = open && state.activePanel === item.id
@@ -63,6 +47,23 @@ export function SidePanel({ api }: SidePanelProps) {
           )
         })}
       </nav>
+
+      {open ? (
+        <div className="side-panel">
+          <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
+          <div className="side-panel-body">
+            {state.activePanel === 'cells' && <CellsPanel api={api} />}
+            {state.activePanel === 'history' && <HistoryPanel api={api} />}
+            {state.activePanel === 'plot' && <PlotPanel api={api} />}
+            {state.activePanel === 'files' && <FilesPanel api={api} />}
+            {state.activePanel === 'env' && <EnvPanel api={api} />}
+            {state.activePanel === 'data' && <DataPanel api={api} />}
+            {state.activePanel === 'structure' && <StructurePanel api={api} />}
+            {state.activePanel === 'console' && <ConsolePanel lines={state.consoleLines} />}
+            {state.activePanel === 'ai' && <AiPanel api={api} />}
+          </div>
+        </div>
+      ) : null}
     </aside>
   )
 }
