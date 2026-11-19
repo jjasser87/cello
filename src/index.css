@@ -22,7 +22,9 @@
   --radius: 10px;
   --ribbon-width: 52px;
   --panel-width: min(420px, 46vw);
-  --panel-motion: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-duration: 240ms;
+  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-motion: var(--panel-duration) var(--panel-ease);
   /* Match .code-area: 80 mono columns + horizontal padding + border. */
   --cell-pad-x: 1.05rem;
   --cell-border: 1px;
@@ -343,7 +345,7 @@ code,
   pointer-events: none;
   transition:
     width var(--panel-motion),
-    opacity calc(var(--panel-motion) * 0.85) ease;
+    opacity calc(var(--panel-duration) * 0.85) var(--panel-ease);
 }
 
 .side-shell.is-open .side-panel-slot {
@@ -949,21 +951,34 @@ code,
     width: 100%;
     max-height: 0;
     opacity: 0;
+    overflow: hidden;
     transition:
       max-height var(--panel-motion),
-      opacity calc(var(--panel-motion) * 0.85) ease;
+      opacity calc(var(--panel-duration) * 0.85) var(--panel-ease);
   }
 
   .side-shell.is-open .side-panel-slot {
     max-height: 70vh;
     opacity: 1;
+    /* Cap height and scroll so long panel bodies stay reachable on mobile. */
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .side-panel {
     width: 100%;
     min-width: 0;
+    min-height: 0;
+    height: auto;
+    max-height: 70vh;
     border-right: none;
     transform: none;
+  }
+
+  .side-panel-body {
+    min-height: 0;
+    overflow: auto;
   }
 
   .ribbon-item {
