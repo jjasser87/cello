@@ -21,6 +21,9 @@
   --add: rgba(196, 138, 58, 0.28);
   --radius: 10px;
   --ribbon-width: 52px;
+  /* Match .code-area: 80 mono columns + horizontal padding + border. */
+  --cell-pad-x: 1.05rem;
+  --cell-border: 1px;
   --font-display: 'Fraunces', Georgia, serif;
   --font-ui: 'IBM Plex Sans', 'Segoe UI', sans-serif;
   --font-mono: 'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
@@ -116,46 +119,89 @@ code,
 
 .workspace {
   min-height: 100vh;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: stretch;
+  padding: 0.75rem 1rem 1rem;
+  overflow: auto;
+}
+
+/* Cell column + ribbon (+ expanded panel) as one compact lane — not full-bleed. */
+.workspace-lane {
+  display: flex;
+  align-items: stretch;
+  width: fit-content;
+  /* Do not cap at the viewport: let .workspace scroll horizontally when a panel opens. */
+  min-height: calc(100vh - 1.75rem);
   gap: 0;
+  flex-shrink: 0;
 }
 
 .main-window {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
-  min-width: 0;
-  padding: 0.85rem 1rem 1rem;
+  min-height: 0;
+  /*
+   * Size the chrome column with the same mono metrics as .code-area so
+   * toolbar + ribbon sit flush with the 80-column writing surface.
+   * Never shrink below that width when a side panel opens.
+   */
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
+  min-width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
+  flex-shrink: 0;
+  padding: 0;
   position: relative;
-  overflow: auto;
 }
 
 .main-actions {
   display: flex;
-  gap: 0.35rem;
+  gap: 0.3rem;
   flex-wrap: wrap;
-  margin-bottom: 0.55rem;
+  width: 100%;
+  margin-bottom: 0.4rem;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+
+.main-actions button {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
 }
 
 .cell-editor {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.5rem;
   flex: 1;
   min-height: 0;
-  padding-top: 0.15rem;
-  width: fit-content;
+  padding-top: 0.1rem;
+  width: 100%;
   max-width: 100%;
 }
 
 .cell-toolbar {
   display: flex;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
   width: 100%;
-  min-width: calc(80ch + 2.1rem + 2px);
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+}
+
+.cell-toolbar button {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.8rem;
+  border-radius: 6px;
+}
+
+.cell-toolbar .cell-name-input {
+  font-size: 1.15rem;
+  padding: 0.1rem 0.3rem;
 }
 
 .cell-identity,
@@ -172,6 +218,10 @@ code,
   font-family: var(--font-mono);
   color: var(--wood);
   font-size: 0.85rem;
+}
+
+.cell-identity {
+  font-family: var(--font-ui);
 }
 
 .cell-name-input {
@@ -198,18 +248,18 @@ code,
   width: 80ch;
   max-width: none;
   flex: 1 1 auto;
-  align-self: flex-start;
+  align-self: stretch;
   min-height: calc(100vh - 9rem);
   resize: vertical;
   overflow: auto;
   white-space: pre;
   tab-size: 2;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
+  border: var(--cell-border) solid var(--line);
   background: var(--bg-code);
-  padding: 1rem 1.05rem;
+  padding: 1rem var(--cell-pad-x);
   font-family: var(--font-mono);
-  font-size: 0.92rem;
+  font-size: 1em; /* inherit mono metrics from .main-window */
   line-height: 1.55;
   letter-spacing: 0;
   color: var(--ink);
@@ -225,15 +275,19 @@ code,
 .editor-footnote {
   margin: 0;
   color: var(--muted);
+  font-family: var(--font-ui);
   font-size: 0.8rem;
 }
 
 .side-shell {
   display: flex;
   align-items: stretch;
-  min-height: 100vh;
+  align-self: stretch;
+  min-height: 100%;
   border-left: 1px solid var(--line);
   background: var(--bg-elevated);
+  /* Sit flush against the cell; do not pin to the far window edge. */
+  flex-shrink: 0;
 }
 
 .side-shell.is-collapsed {
@@ -241,7 +295,7 @@ code,
 }
 
 .side-shell.is-open {
-  width: min(420px, 46vw);
+  width: calc(var(--ribbon-width) + min(420px, 46vw));
 }
 
 .side-ribbon {
@@ -250,9 +304,9 @@ code,
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding: 0.55rem 0.3rem;
+  padding: 0.45rem 0.28rem;
   background: #050505;
-  border-left: 1px solid var(--line);
+  border-right: 1px solid var(--line);
 }
 
 .ribbon-item {
@@ -300,6 +354,7 @@ code,
 .side-panel {
   flex: 1;
   min-width: 0;
+  width: min(420px, 46vw);
   display: grid;
   grid-template-rows: auto 1fr;
   background: var(--bg-panel);
@@ -773,7 +828,7 @@ code,
 @keyframes panel-in {
   from {
     opacity: 0;
-    transform: translateX(10px);
+    transform: translateX(-8px);
   }
   to {
     opacity: 1;
@@ -796,12 +851,17 @@ code,
 
 @media (max-width: 860px) {
   .workspace {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr auto;
+    padding: 0.65rem 0.75rem 0.85rem;
+  }
+
+  .workspace-lane {
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
   }
 
   .main-window {
-    min-height: auto;
+    width: 100%;
   }
 
   .code-area {
@@ -823,12 +883,18 @@ code,
     border-top: 1px solid var(--line);
   }
 
+  .side-panel {
+    width: 100%;
+    border-right: none;
+  }
+
   .side-ribbon {
     flex-direction: row;
     width: 100%;
     overflow-x: auto;
-    border-left: none;
-    border-top: 1px solid var(--line);
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+    order: -1;
   }
 
   .ribbon-item {
