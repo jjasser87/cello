@@ -28,27 +28,11 @@ export function SidePanel({ api }: SidePanelProps) {
       className={`side-shell ${open ? 'is-open' : 'is-collapsed'}`}
       aria-label={open ? `${state.activePanel} panel` : 'Panel ribbon'}
     >
-      {/* Ribbon stays flush against the cell; panels expand to its right. */}
-      <nav className="side-ribbon" aria-label="Panel options">
-        {RIBBON_ITEMS.map((item) => {
-          const active = open && state.activePanel === item.id
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className={`ribbon-item ${active ? 'is-active' : ''}`}
-              aria-pressed={active}
-              title={item.label}
-              onClick={() => toggleSidePanel(item.id)}
-            >
-              <span className="ribbon-short">{item.short}</span>
-              <span className="ribbon-label">{item.label}</span>
-            </button>
-          )
-        })}
-      </nav>
-
-      {/* Keep mounted so width/opacity can animate closed as well as open. */}
+      {/*
+        Order: panel slot, then ribbon. Collapsed slot width is 0 so the ribbon
+        sits against the cell; when open the panel grows between cell and ribbon
+        and the ribbon stays at the far/right edge of the expanded cluster.
+      */}
       <div
         className="side-panel-slot"
         aria-hidden={!open}
@@ -69,6 +53,25 @@ export function SidePanel({ api }: SidePanelProps) {
           </div>
         </div>
       </div>
+
+      <nav className="side-ribbon" aria-label="Panel options">
+        {RIBBON_ITEMS.map((item) => {
+          const active = open && state.activePanel === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className={`ribbon-item ${active ? 'is-active' : ''}`}
+              aria-pressed={active}
+              title={item.label}
+              onClick={() => toggleSidePanel(item.id)}
+            >
+              <span className="ribbon-short">{item.short}</span>
+              <span className="ribbon-label">{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
     </aside>
   )
 }
