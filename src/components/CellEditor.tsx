@@ -79,9 +79,12 @@ export function CellEditor({
         onKeyDown={(event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
             event.preventDefault()
+            event.stopPropagation()
             onRun()
+            return
           }
-          if (event.key === 'Tab') {
+          // Keep Shift+Tab for focus navigation out of the editor.
+          if (event.key === 'Tab' && !event.shiftKey) {
             event.preventDefault()
             const target = event.currentTarget
             const start = target.selectionStart
@@ -98,7 +101,7 @@ export function CellEditor({
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">
-        <code># %%</code> cells · ⌘/Ctrl+Enter to run · open the ribbon for Flow, History, Plot, and more
+        <code>// %%</code> cells · ⌘/Ctrl+Enter to run · open the ribbon for Flow, History, Plot, Console…
       </p>
     </section>
   )

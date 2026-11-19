@@ -85,8 +85,17 @@ export function useWorkspace() {
     [state.cells, state.activeCellId, state.activePanel, state.scriptPath, state.files],
   )
 
+  const saveErrorRef = useRef<string | null>(null)
+
   useEffect(() => {
-    saveWorkspace(persistable)
+    const result = saveWorkspace(persistable)
+    if (!result.ok) {
+      // Avoid crashing the editor when storage is unavailable; keep a sticky note.
+      saveErrorRef.current = result.error
+      console.warn('Cello autosave failed:', result.error)
+    } else {
+      saveErrorRef.current = null
+    }
   }, [persistable])
 
   const activeCell = useMemo(
@@ -170,7 +179,12 @@ export function useWorkspace() {
           ? cells[Math.max(0, prev.cells.findIndex((c) => c.id === cellId) - 1)]?.id ??
             cells[0].id
           : prev.activeCellId
-      return { ...prev, cells, activeCellId }
+      const history = prev.history.filter((entry) => entry.cellId !== cellId)
+      const historyIndex =
+        history.length === 0
+          ? -1
+          : Math.min(prev.historyIndex, history.length - 1)
+      return { ...prev, cells, activeCellId, history, historyIndex }
     })
   }, [])
 
@@ -267,85 +281,129 @@ export function useWorkspace() {
   )
 
   const runAll = useCallback(() => {
+    // Execute once outside React updaters so StrictMode cannot double-run cells.
+    const cells = state.cells
+    const priorHistory = state.history
     sharedRef.current = createSharedBag()
-    setState((prev) => ({
-      ...prev,
-      env: [],
-      plots: [],
-      tables: [],
-      activePlotId: null,
-      activeTableId: null,
-      history: [],
-      historyIndex: -1,
-      consoleLines: ['Kernel reset. Running all cells in order…'],
-      cells: prev.cells.map((cell) => ({ ...cell, status: 'idle', error: undefined })),
-    }))
+    const shared = sharedRef.current
 
-    // Sequential run against fresh shared env
-    queueMicrotask(() => {
-      const shared = sharedRef.current
-      setState((prev) => {
-        let working = { ...prev }
-        for (const cell of prev.cells) {
-          const previousEntry = [...working.history]
-            .reverse()
-            .find((entry) => entry.cellId === cell.id)
-          const result = runCellCode(cell.code, shared, { cellId: cell.id })
-          const historyEntry: HistoryEntry = {
-            id: createId('hist'),
-            cellId: cell.id,
-            cellName: cell.name,
-            code: cell.code,
-            previousCode: previousEntry?.code ?? '',
-            timestamp: Date.now(),
-            status: result.error ? 'error' : 'ok',
-            error: result.error,
-            outputText: result.logs.join('\n'),
-            plotId: result.plot?.id,
-            dataId: result.table?.id,
-          }
-          working = {
-            ...working,
-            cells: working.cells.map((item) =>
-              item.id === cell.id
-                ? {
-                    ...item,
-                    status: result.error ? 'error' : 'ok',
-                    error: result.error,
-                    lastRunAt: Date.now(),
-                  }
-                : item,
-            ),
-            history: [...working.history, historyEntry],
-            historyIndex: working.history.length,
-            plots: result.plot ? [...working.plots, result.plot] : working.plots,
-            tables: result.table ? [...working.tables, result.table] : working.tables,
-            activePlotId: result.plot?.id ?? working.activePlotId,
-            activeTableId: result.table?.id ?? working.activeTableId,
-            env: result.env,
-            consoleLines: [
-              ...working.consoleLines,
-              `▸ ${cell.name}`,
-              ...(result.logs.length
-                ? result.logs
-                : [result.error ? `Error: ${result.error}` : '(no output)']),
-            ],
-            activePanel: result.plot
-              ? 'plot'
-              : result.table
-                ? 'data'
-                : result.error
-                  ? 'history'
-                  : working.activePanel,
-            sidePanelOpen:
-              result.plot || result.table || result.error ? true : working.sidePanelOpen,
-          }
-          if (result.error) break
-        }
-        return working
+    type Batch = {
+      cellId: string
+      status: Cell['status']
+      error?: string
+      historyEntry: HistoryEntry
+      plot?: NonNullable<ReturnType<typeof runCellCode>['plot']>
+      table?: NonNullable<ReturnType<typeof runCellCode>['table']>
+      env: ReturnType<typeof runCellCode>['env']
+      logs: string[]
+    }
+
+    const batches: Batch[] = []
+    let historyCursor = [...priorHistory]
+    let stopped = false
+
+    for (const cell of cells) {
+      const previousEntry = [...historyCursor].reverse().find((entry) => entry.cellId === cell.id)
+      const result = runCellCode(cell.code, shared, { cellId: cell.id })
+      const historyEntry: HistoryEntry = {
+        id: createId('hist'),
+        cellId: cell.id,
+        cellName: cell.name,
+        code: cell.code,
+        previousCode: previousEntry?.code ?? '',
+        timestamp: Date.now(),
+        status: result.error ? 'error' : 'ok',
+        error: result.error,
+        outputText: result.logs.join('\n'),
+        plotId: result.plot?.id,
+        dataId: result.table?.id,
+      }
+      historyCursor = [...historyCursor, historyEntry]
+      batches.push({
+        cellId: cell.id,
+        status: result.error ? 'error' : 'ok',
+        error: result.error,
+        historyEntry,
+        plot: result.plot ?? undefined,
+        table: result.table ?? undefined,
+        env: result.env,
+        logs: result.logs,
       })
+      if (result.error) {
+        stopped = true
+        break
+      }
+    }
+
+    setState((prev) => {
+      const history = [...prev.history, ...batches.map((batch) => batch.historyEntry)]
+      const plots = [
+        ...prev.plots,
+        ...batches.flatMap((batch) => (batch.plot ? [batch.plot] : [])),
+      ]
+      const tables = [
+        ...prev.tables,
+        ...batches.flatMap((batch) => (batch.table ? [batch.table] : [])),
+      ]
+      const last = batches[batches.length - 1]
+      let activePanel = prev.activePanel
+      let sidePanelOpen = prev.sidePanelOpen
+      if (last?.plot) {
+        activePanel = 'plot'
+        sidePanelOpen = true
+      } else if (last?.table) {
+        activePanel = 'data'
+        sidePanelOpen = true
+      } else if (last?.error) {
+        activePanel = 'history'
+        sidePanelOpen = true
+      }
+
+      const consoleLines = [
+        ...prev.consoleLines,
+        stopped
+          ? 'Kernel reset. Running all cells in order (stopped on error)…'
+          : 'Kernel reset. Running all cells in order…',
+        ...batches.flatMap((batch) => {
+          const cell = prev.cells.find((item) => item.id === batch.cellId)
+          return [
+            `▸ ${cell?.name ?? batch.cellId}`,
+            ...(batch.logs.length
+              ? batch.logs
+              : [batch.error ? `Error: ${batch.error}` : '(no output)']),
+          ]
+        }),
+      ].slice(-200)
+
+      const statusById = new Map(batches.map((batch) => [batch.cellId, batch]))
+
+      return {
+        ...prev,
+        env: last?.env ?? [],
+        plots,
+        tables,
+        activePlotId: last?.plot?.id ?? prev.activePlotId,
+        activeTableId: last?.table?.id ?? prev.activeTableId,
+        history,
+        historyIndex: history.length - 1,
+        consoleLines,
+        activePanel,
+        sidePanelOpen,
+        cells: prev.cells.map((cell) => {
+          const batch = statusById.get(cell.id)
+          if (!batch) {
+            return { ...cell, status: 'idle', error: undefined }
+          }
+          return {
+            ...cell,
+            status: batch.status,
+            error: batch.error,
+            lastRunAt: Date.now(),
+          }
+        }),
+      }
     })
-  }, [])
+  }, [state.cells, state.history])
 
   const resetKernel = useCallback(() => {
     sharedRef.current = createSharedBag()
@@ -365,10 +423,11 @@ export function useWorkspace() {
     setState((prev) => {
       if (index < 0 || index >= prev.history.length) return prev
       const entry = prev.history[index]
+      const cellExists = prev.cells.some((cell) => cell.id === entry.cellId)
       return {
         ...prev,
         historyIndex: index,
-        activeCellId: entry.cellId,
+        activeCellId: cellExists ? entry.cellId : prev.activeCellId,
         activePlotId: entry.plotId ?? prev.activePlotId,
         activeTableId: entry.dataId ?? prev.activeTableId,
       }
@@ -379,6 +438,16 @@ export function useWorkspace() {
     setState((prev) => {
       const entry = prev.history[prev.historyIndex]
       if (!entry) return prev
+      const cellExists = prev.cells.some((cell) => cell.id === entry.cellId)
+      if (!cellExists) {
+        return {
+          ...prev,
+          consoleLines: [
+            ...prev.consoleLines,
+            `warn: cannot restore — cell "${entry.cellName}" no longer exists`,
+          ].slice(-200),
+        }
+      }
       return {
         ...prev,
         cells: prev.cells.map((cell) =>

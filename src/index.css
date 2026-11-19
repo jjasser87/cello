@@ -291,7 +291,7 @@ code,
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   background: var(--bg-panel);
   border-right: 1px solid var(--line);
   animation: panel-in 220ms ease both;
@@ -331,29 +331,23 @@ code,
   padding: 0.9rem 1rem;
 }
 
-.console-dock {
-  border-top: 1px solid var(--line);
+.console-panel {
+  min-height: 240px;
+}
+
+.console-full {
+  margin: 0;
+  padding: 0.85rem 0.9rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
   background: #050505;
   color: var(--ink-soft);
-  padding: 0.65rem 0.9rem 0.8rem;
-}
-
-.console-label {
-  font-size: 0.68rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--wood);
-  margin-bottom: 0.3rem;
-}
-
-.console-dock pre {
-  margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   white-space: pre-wrap;
-  max-height: 110px;
+  min-height: 240px;
+  max-height: calc(100vh - 10rem);
   overflow: auto;
-  color: var(--ink-soft);
 }
 
 .stack-list,
@@ -537,7 +531,7 @@ code,
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  align-items: end;
+  align-items: stretch;
   gap: 0.45rem;
   padding: 0.9rem 0.4rem 0.35rem;
   border-radius: 8px;
@@ -549,21 +543,77 @@ code,
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
   height: 100%;
   gap: 0.3rem;
   min-width: 0;
 }
 
+.bar-track {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  min-height: 120px;
+}
+
+.bar-zero {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 1px;
+  background: rgba(242, 235, 227, 0.2);
+}
+
 .bar {
+  position: absolute;
+  left: 16%;
   width: 68%;
-  min-height: 4px;
-  border-radius: 6px 6px 2px 2px;
+  min-height: 3px;
+  border-radius: 4px;
   background: linear-gradient(180deg, var(--wood-bright), var(--wood-deep));
   animation: grow 420ms ease both;
 }
 
+.bar.is-negative {
+  background: linear-gradient(180deg, var(--wood-deep), #5c3418);
+  border-radius: 2px 2px 4px 4px;
+}
+
 .bar-col span {
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.line-chart {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg-code);
+  padding: 0.5rem 0.4rem 0.35rem;
+}
+
+.chart-line {
+  stroke: var(--wood-bright);
+  stroke-width: 2.5;
+}
+
+.chart-point {
+  fill: var(--wood);
+}
+
+.chart-baseline {
+  stroke: rgba(242, 235, 227, 0.2);
+  stroke-width: 1;
+}
+
+.line-labels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem 0.35rem;
+}
+
+.line-labels span {
+  text-align: center;
   font-size: 0.68rem;
   color: var(--muted);
 }

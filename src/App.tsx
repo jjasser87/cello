@@ -10,10 +10,18 @@ export default function App() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault()
-        runCell()
+      if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
+      // CellEditor already handles this shortcut inside the textarea.
+      const target = event.target
+      if (
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
       }
+      event.preventDefault()
+      runCell()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)

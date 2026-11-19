@@ -39,9 +39,66 @@ export function createSharedBag(): SharedBag {
   return Object.create(null) as SharedBag
 }
 
-/** Turn top-level const/let/var into assignments so bindings persist across cells. */
+/**
+ * Persist simple top-level bindings: `const|let|var name = …` → `name = …`.
+ * Leaves destructuring and other patterns alone so we don't invent syntax errors.
+ */
 function persistableCode(code: string): string {
-  return code.replace(/^(?:const|let|var)\s+/gm, '')
+  return code.replace(
+    /^([ \t]*)(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/gm,
+    '$1$2 =',
+  )
+}
+
+function errorMessage(err: unknown): string {
+  if (err instanceof Error) {
+    return err.message.trim() || err.name || 'Error'
+  }
+  const text = String(err).trim()
+  return text || 'Error'
+}
+
+function normalizePlotSpec(
+  spec: unknown,
+  cellId: string,
+): { plot?: PlotSpec; error?: string } {
+  if (!spec || typeof spec !== 'object') {
+    return { error: 'cello.plot() expects an object with labels and values arrays' }
+  }
+  const input = spec as {
+    title?: unknown
+    kind?: unknown
+    labels?: unknown
+    values?: unknown
+  }
+  if (!Array.isArray(input.labels) || !Array.isArray(input.values)) {
+    return { error: 'cello.plot() requires labels and values arrays' }
+  }
+  if (input.labels.length !== input.values.length) {
+    return { error: 'cello.plot() labels and values must be the same length' }
+  }
+  const labels = input.labels.map((label) => String(label))
+  const values = input.values.map((value) => {
+    const n = typeof value === 'number' ? value : Number(value)
+    return Number.isFinite(n) ? n : 0
+  })
+  const kind = input.kind === 'line' ? 'line' : 'bar'
+  const title =
+    typeof input.title === 'string' && input.title.trim()
+      ? input.title
+      : 'Plot'
+
+  return {
+    plot: {
+      id: createId('plot'),
+      cellId,
+      title,
+      kind,
+      labels: [...labels],
+      values: [...values],
+      createdAt: Date.now(),
+    },
+  }
 }
 
 export function runCellCode(
@@ -66,53 +123,46 @@ export function runCellCode(
   }
 
   const celloApi = {
-    plot: (spec: {
-      title?: string
-      kind?: 'bar' | 'line'
-      labels: string[]
-      values: number[]
-    }) => {
-      plot = {
-        id: createId('plot'),
-        cellId: meta.cellId,
-        title: spec.title ?? 'Plot',
-        kind: spec.kind ?? 'bar',
-        labels: spec.labels,
-        values: spec.values,
-        createdAt: Date.now(),
-      }
+    plot: (spec: unknown) => {
+      const result = normalizePlotSpec(spec, meta.cellId)
+      if (result.error) throw new Error(result.error)
+      plot = result.plot!
       return plot
     },
-    table: (rows: Record<string, unknown>[] | unknown, name = 'data') => {
+    table: (rows: unknown, name = 'data') => {
+      const tableName = typeof name === 'string' && name.trim() ? name : 'data'
+      // Keep the caller's value in the shared env; normalize only for display.
+      shared[tableName] = rows
       const normalized = normalizeRows(rows)
       table = {
         id: createId('data'),
         cellId: meta.cellId,
-        name,
+        name: tableName,
         columns: normalized.columns,
         rows: normalized.rows,
         createdAt: Date.now(),
       }
-      shared[name] = normalized.rows
       return table
     },
   }
 
   const scope = new Proxy(shared, {
-    has(target, prop) {
+    has(_target, prop) {
       if (prop === Symbol.unscopables) return false
-      if (prop in target) return true
-      if (prop === 'console' || prop === 'cello') return true
-      // Claim unknown identifiers so assignments stick on the shared env,
-      // while still allowing real globals (Math, JSON, …) via the outer scope.
-      return typeof prop === 'string' && !(prop in globalThis)
+      // Claim all identifiers so assignments stay in the kernel bag,
+      // including names that also exist on globalThis (Math, etc.).
+      return typeof prop === 'string' || typeof prop === 'symbol'
     },
     get(target, prop, receiver) {
       if (prop === Symbol.unscopables) return undefined
       if (prop === 'console') return consoleApi
       if (prop === 'cello') return celloApi
-      if (prop === 'globalThis' || prop === 'window' || prop === 'self') return receiver
+      if (prop === 'globalThis') return globalThis
+      if (prop === 'window' || prop === 'self') return globalThis
       if (prop in target) return Reflect.get(target, prop, receiver)
+      if (typeof prop === 'string' && prop in globalThis) {
+        return (globalThis as Record<string, unknown>)[prop]
+      }
       return undefined
     },
     set(target, prop, value) {
@@ -131,13 +181,12 @@ export function runCellCode(
     )
     runner(scope)
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
     return {
       logs,
       plot,
       table,
       env: snapshotEnv(shared),
-      error: message,
+      error: errorMessage(err),
     }
   }
 

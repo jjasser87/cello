@@ -1,11 +1,12 @@
 import type { Cell } from '../types'
 
-const CELL_RE = /^#\s*%%\s*(.*)$/
+/** Accept both `// %%` (valid JS) and legacy `# %%` markers. */
+const CELL_RE = /^(?:\/\/|#)\s*%%\s*(.*)$/
 
 export function cellsToScript(cells: Cell[]): string {
   return cells
     .map((cell) => {
-      const header = cell.name.trim() ? `# %% ${cell.name.trim()}` : '# %%'
+      const header = cell.name.trim() ? `// %% ${cell.name.trim()}` : '// %%'
       return `${header}\n${cell.code.replace(/\s+$/, '')}`
     })
     .join('\n\n')
@@ -53,7 +54,7 @@ export function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`
 }
 
-export const STARTER_SCRIPT = `# %% Load sample data
+export const STARTER_SCRIPT = `// %% Load sample data
 const sales = [
   { month: "Jan", revenue: 42, region: "North" },
   { month: "Feb", revenue: 51, region: "North" },
@@ -66,7 +67,7 @@ const sales = [
 cello.table(sales, "sales");
 console.log("Loaded", sales.length, "rows");
 
-# %% Summarize by month
+// %% Summarize by month
 const byMonth = sales.map((row) => row.revenue);
 const total = byMonth.reduce((sum, value) => sum + value, 0);
 const average = total / byMonth.length;
@@ -74,7 +75,7 @@ const average = total / byMonth.length;
 console.log("Total revenue:", total);
 console.log("Average:", average.toFixed(1));
 
-# %% Plot revenue
+// %% Plot revenue
 cello.plot({
   title: "Monthly revenue",
   kind: "bar",
@@ -82,7 +83,7 @@ cello.plot({
   values: byMonth,
 });
 
-# %% Spotlight a region
+// %% Spotlight a region
 const south = sales.filter((row) => row.region === "South");
 cello.table(south, "south_sales");
 console.log("South months:", south.map((row) => row.month).join(", "));

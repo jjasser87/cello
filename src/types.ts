@@ -7,6 +7,7 @@ export type PanelId =
   | 'data'
   | 'structure'
   | 'ai'
+  | 'console'
 
 export type CellStatus = 'idle' | 'running' | 'ok' | 'error'
 

@@ -11,6 +11,7 @@ const RIBBON_ITEMS: { id: PanelId; label: string; short: string }[] = [
   { id: 'env', label: 'Env', short: 'En' },
   { id: 'data', label: 'Data', short: 'Da' },
   { id: 'structure', label: 'Flow', short: 'Fl' },
+  { id: 'console', label: 'Console', short: 'Co' },
   { id: 'ai', label: 'Agent', short: 'Ag' },
 ]
 
@@ -38,9 +39,9 @@ export function SidePanel({ api }: SidePanelProps) {
             {state.activePanel === 'env' && <EnvPanel api={api} />}
             {state.activePanel === 'data' && <DataPanel api={api} />}
             {state.activePanel === 'structure' && <StructurePanel api={api} />}
+            {state.activePanel === 'console' && <ConsolePanel lines={state.consoleLines} />}
             {state.activePanel === 'ai' && <AiPanel api={api} />}
           </div>
-          <ConsoleDock lines={state.consoleLines} />
         </div>
       ) : null}
 
@@ -75,6 +76,7 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
     data: { title: 'Data', blurb: 'Tables from cello.table().' },
     structure: { title: 'Script flow', blurb: 'Where this cell sits.' },
+    console: { title: 'Console', blurb: 'Kernel output for recent runs.' },
     ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
   const copy = titles[panel]
@@ -199,7 +201,17 @@ function HistoryPanel({ api }: SidePanelProps) {
       {entry.outputText ? <pre className="output-block">{entry.outputText}</pre> : null}
       {entry.error ? <div className="cell-error">Error: {entry.error}</div> : null}
 
-      <button type="button" className="primary wide" onClick={restoreHistoryCode}>
+      <button
+        type="button"
+        className="primary wide"
+        onClick={restoreHistoryCode}
+        disabled={!state.cells.some((cell) => cell.id === entry.cellId)}
+        title={
+          state.cells.some((cell) => cell.id === entry.cellId)
+            ? 'Restore this code into the cell'
+            : 'Cell no longer exists'
+        }
+      >
         Restore this code into the cell
       </button>
     </div>
@@ -218,26 +230,13 @@ function PlotPanel({ api }: SidePanelProps) {
     )
   }
 
-  const max = Math.max(...plot.values, 1)
-
   return (
     <div className="plot-panel">
       <div className="plot-title-row">
         <h3>{plot.title}</h3>
         <span className="muted">{plot.kind}</span>
       </div>
-      <div className="bar-chart" role="img" aria-label={plot.title}>
-        {plot.labels.map((label, index) => (
-          <div key={`${label}-${index}`} className="bar-col">
-            <div
-              className="bar"
-              style={{ height: `${(plot.values[index] / max) * 100}%` }}
-              title={`${label}: ${plot.values[index]}`}
-            />
-            <span>{label}</span>
-          </div>
-        ))}
-      </div>
+      {plot.kind === 'line' ? <LineChart plot={plot} /> : <BarChart plot={plot} />}
       <ul className="plot-list">
         {state.plots
           .slice()
@@ -252,11 +251,96 @@ function PlotPanel({ api }: SidePanelProps) {
   )
 }
 
+function BarChart({
+  plot,
+}: {
+  plot: { title: string; labels: string[]; values: number[] }
+}) {
+  const max = Math.max(0, ...plot.values)
+  const min = Math.min(0, ...plot.values)
+  const span = max - min || 1
+  const zeroRatio = (max - 0) / span
+
+  return (
+    <div className="bar-chart has-baseline" role="img" aria-label={plot.title}>
+      {plot.labels.map((label, index) => {
+        const value = plot.values[index] ?? 0
+        const height = `${(Math.abs(value) / span) * 100}%`
+        const isNegative = value < 0
+        return (
+          <div key={`${label}-${index}`} className="bar-col">
+            <div className="bar-track">
+              <div className="bar-zero" style={{ top: `${zeroRatio * 100}%` }} />
+              <div
+                className={`bar ${isNegative ? 'is-negative' : 'is-positive'}`}
+                style={
+                  isNegative
+                    ? { top: `${zeroRatio * 100}%`, height }
+                    : { bottom: `${(0 - min) / span * 100}%`, height }
+                }
+                title={`${label}: ${value}`}
+              />
+            </div>
+            <span>{label}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function LineChart({
+  plot,
+}: {
+  plot: { title: string; labels: string[]; values: number[] }
+}) {
+  const width = 320
+  const height = 180
+  const pad = 16
+  const max = Math.max(0, ...plot.values)
+  const min = Math.min(0, ...plot.values)
+  const span = max - min || 1
+  const points = plot.values.map((value, index) => {
+    const x =
+      plot.values.length === 1
+        ? width / 2
+        : pad + (index / (plot.values.length - 1)) * (width - pad * 2)
+    const y = pad + ((max - value) / span) * (height - pad * 2)
+    return `${x},${y}`
+  })
+
+  return (
+    <div className="line-chart" role="img" aria-label={plot.title}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="180">
+        <line
+          x1={pad}
+          x2={width - pad}
+          y1={pad + ((max - 0) / span) * (height - pad * 2)}
+          y2={pad + ((max - 0) / span) * (height - pad * 2)}
+          className="chart-baseline"
+        />
+        <polyline points={points.join(' ')} className="chart-line" fill="none" />
+        {plot.values.map((value, index) => {
+          const [x, y] = points[index].split(',').map(Number)
+          return <circle key={index} cx={x} cy={y} r="3.5" className="chart-point">
+            <title>{`${plot.labels[index]}: ${value}`}</title>
+          </circle>
+        })}
+      </svg>
+      <div className="line-labels">
+        {plot.labels.map((label) => (
+          <span key={label}>{label}</span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function FilesPanel({ api }: SidePanelProps) {
   return (
     <div className="file-tree">
       <p className="muted small">
-        Active script: <code>{api.state.scriptPath}</code> (<code># %%</code> cells)
+        Active script: <code>{api.state.scriptPath}</code> (<code>// %%</code> cells)
       </p>
       <FileNode nodes={api.state.files} depth={0} />
     </div>
@@ -431,11 +515,13 @@ function AiPanel({ api }: SidePanelProps) {
   )
 }
 
-function ConsoleDock({ lines }: { lines: string[] }) {
+function ConsolePanel({ lines }: { lines: string[] }) {
+  if (lines.length === 0) {
+    return <EmptyState text="Console is empty. Run a cell to capture kernel output." />
+  }
   return (
-    <div className="console-dock">
-      <div className="console-label">Console</div>
-      <pre>{lines.slice(-12).join('\n')}</pre>
+    <div className="console-panel">
+      <pre className="console-full">{lines.join('\n')}</pre>
     </div>
   )
 }

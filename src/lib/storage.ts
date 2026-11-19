@@ -3,7 +3,7 @@ import { cellsToScript } from './script'
 
 const KEY = 'cello.workspace.v0'
 
-export function saveWorkspace(state: WorkspaceState): void {
+export function saveWorkspace(state: WorkspaceState): { ok: true } | { ok: false; error: string } {
   const payload = {
     script: cellsToScript(state.cells),
     cells: state.cells.map(({ id, name, code }) => ({ id, name, code })),
@@ -11,7 +11,13 @@ export function saveWorkspace(state: WorkspaceState): void {
     activePanel: state.activePanel,
     scriptPath: state.scriptPath,
   }
-  localStorage.setItem(KEY, JSON.stringify(payload))
+  try {
+    localStorage.setItem(KEY, JSON.stringify(payload))
+    return { ok: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { ok: false, error: message || 'localStorage write failed' }
+  }
 }
 
 export function loadWorkspace(): Partial<{
