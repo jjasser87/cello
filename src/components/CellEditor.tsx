@@ -73,7 +73,9 @@ export function CellEditor({
       <textarea
         ref={ref}
         className="code-area"
+        cols={80}
         spellCheck={false}
+        wrap="off"
         value={cell.code}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
@@ -101,7 +103,7 @@ export function CellEditor({
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">
-        <code>// %%</code> cells · ⌘/Ctrl+Enter to run · open the ribbon for Flow, History, Plot, Console…
+        <code>// %%</code> cells · 80-column writing surface · ⌘/Ctrl+Enter to run · ribbon for the rest
       </p>
     </section>
   )
