@@ -1,28 +1,23 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Cell } from '../types'
 
 interface CellEditorProps {
   cell: Cell
   index: number
-  total: number
   onChange: (code: string) => void
   onRename: (name: string) => void
   onRun: () => void
-  onAdd: () => void
-  onDelete: () => void
-  onMove: (direction: -1 | 1) => void
+  /** Ribbon/panel cluster; height-pinned to the code frame only. */
+  sidePanel: ReactNode
 }
 
 export function CellEditor({
   cell,
   index,
-  total,
   onChange,
   onRename,
   onRun,
-  onAdd,
-  onDelete,
-  onMove,
+  sidePanel,
 }: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
@@ -30,76 +25,62 @@ export function CellEditor({
     const el = ref.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.max(220, el.scrollHeight)}px`
+    // Grow with content; CSS min-height keeps the ribbon track fully visible (no inner scroll).
+    el.style.height = `${Math.max(el.scrollHeight, 220)}px`
   }, [cell.code, cell.id])
 
   return (
     <section className="cell-editor" aria-label={`Editing ${cell.name}`}>
-      <div className="cell-toolbar">
-        <div className="cell-identity">
-          <span className="cell-index">#{index + 1}</span>
-          <input
-            className="cell-name-input"
-            value={cell.name}
-            onChange={(event) => onRename(event.target.value)}
-            aria-label="Cell name"
-          />
-          <StatusPill status={cell.status} />
-        </div>
-        <div className="cell-actions">
-          <button type="button" onClick={() => onMove(-1)} disabled={index === 0} title="Move up">
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={index === total - 1}
-            title="Move down"
-          >
-            ↓
-          </button>
-          <button type="button" onClick={onAdd} title="Add cell below">
-            + Cell
-          </button>
-          <button type="button" onClick={onDelete} title="Delete cell">
-            Delete
-          </button>
-          <button type="button" className="primary" onClick={onRun} title="Run cell (⌘/Ctrl+Enter)">
-            Run
-          </button>
-        </div>
+      <div className="cell-header">
+        <span className="cell-index">#{index + 1}</span>
+        <input
+          className="cell-name-input"
+          value={cell.name}
+          onChange={(event) => onRename(event.target.value)}
+          aria-label="Cell name"
+        />
+        <StatusPill status={cell.status} />
       </div>
 
-      <textarea
-        ref={ref}
-        className="code-area"
-        cols={80}
-        spellCheck={false}
-        wrap="off"
-        value={cell.code}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-            event.preventDefault()
-            event.stopPropagation()
-            onRun()
-            return
-          }
-          // Keep Shift+Tab for focus navigation out of the editor.
-          if (event.key === 'Tab' && !event.shiftKey) {
-            event.preventDefault()
-            const target = event.currentTarget
-            const start = target.selectionStart
-            const end = target.selectionEnd
-            const next = `${cell.code.slice(0, start)}  ${cell.code.slice(end)}`
-            onChange(next)
-            requestAnimationFrame(() => {
-              target.selectionStart = target.selectionEnd = start + 2
-            })
-          }
-        }}
-        placeholder="// Write the focused cell here…"
-      />
+      {/*
+        Lane owns only the writing-surface frame. Header and footnote sit
+        outside so the ribbon top/bottom match the code-area edges exactly.
+      */}
+      <div className="workspace-lane">
+        <main className="main-window">
+          <textarea
+            ref={ref}
+            className="code-area"
+            cols={80}
+            spellCheck={false}
+            wrap="off"
+            value={cell.code}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                event.preventDefault()
+                event.stopPropagation()
+                onRun()
+                return
+              }
+              // Keep Shift+Tab for focus navigation out of the editor.
+              if (event.key === 'Tab' && !event.shiftKey) {
+                event.preventDefault()
+                const target = event.currentTarget
+                const start = target.selectionStart
+                const end = target.selectionEnd
+                const next = `${cell.code.slice(0, start)}  ${cell.code.slice(end)}`
+                onChange(next)
+                requestAnimationFrame(() => {
+                  target.selectionStart = target.selectionEnd = start + 2
+                })
+              }
+            }}
+            placeholder="// Write the focused cell here…"
+          />
+        </main>
+        {sidePanel}
+      </div>
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">

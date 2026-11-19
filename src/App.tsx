@@ -7,6 +7,8 @@ export default function App() {
   const api = useWorkspace()
   const { state, activeCell, runCell } = api
   const activeIndex = state.cells.findIndex((cell) => cell.id === activeCell.id)
+  const index = Math.max(0, activeIndex)
+  const total = state.cells.length
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -30,9 +32,13 @@ export default function App() {
   return (
     <div className="app-shell">
       <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
-        <div className="workspace-lane">
-          <main className="main-window">
-            <div className="main-actions">
+        {/*
+          Action chrome sits above the cell. The ribbon is height-pinned to the
+          code-area frame only (see CellEditor workspace-lane), not this row.
+        */}
+        <div className="workspace-cluster">
+          <div className="main-actions" role="toolbar" aria-label="Workspace and cell actions">
+            <div className="action-group">
               <button type="button" onClick={api.runAll} title="Run all cells in order">
                 Run all
               </button>
@@ -54,21 +60,52 @@ export default function App() {
                 Export
               </button>
             </div>
+            <div className="action-group">
+              <button
+                type="button"
+                onClick={() => api.moveCell(activeCell.id, -1)}
+                disabled={index === 0}
+                title="Move up"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => api.moveCell(activeCell.id, 1)}
+                disabled={index === total - 1}
+                title="Move down"
+              >
+                ↓
+              </button>
+              <button type="button" onClick={() => api.addCell(activeCell.id)} title="Add cell below">
+                + Cell
+              </button>
+              <button
+                type="button"
+                onClick={() => api.deleteCell(activeCell.id)}
+                title="Delete cell"
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => api.runCell(activeCell.id)}
+                title="Run cell (⌘/Ctrl+Enter)"
+              >
+                Run
+              </button>
+            </div>
+          </div>
 
-            <CellEditor
-              cell={activeCell}
-              index={Math.max(0, activeIndex)}
-              total={state.cells.length}
-              onChange={api.updateActiveCode}
-              onRename={(name) => api.renameCell(activeCell.id, name)}
-              onRun={() => api.runCell(activeCell.id)}
-              onAdd={() => api.addCell(activeCell.id)}
-              onDelete={() => api.deleteCell(activeCell.id)}
-              onMove={(direction) => api.moveCell(activeCell.id, direction)}
-            />
-          </main>
-
-          <SidePanel api={api} />
+          <CellEditor
+            cell={activeCell}
+            index={index}
+            onChange={api.updateActiveCode}
+            onRename={(name) => api.renameCell(activeCell.id, name)}
+            onRun={() => api.runCell(activeCell.id)}
+            sidePanel={<SidePanel api={api} />}
+          />
         </div>
       </div>
     </div>

@@ -1,3 +1,10 @@
+/* Compute 80ch against the mono writing surface, then inherit as a length. */
+@property --cell-frame-width {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
 :root {
   /* Charcoal shell + cello wood accents (amber / chestnut / honey) */
   --bg: #0a0a0a;
@@ -21,6 +28,15 @@
   --add: rgba(196, 138, 58, 0.28);
   --radius: 10px;
   --ribbon-width: 52px;
+  --ribbon-item-size: 36px;
+  --ribbon-gap: 0.12rem;
+  --ribbon-pad-y: 0.2rem;
+  --ribbon-count: 9;
+  /* Cell frame tall enough for the full ribbon — no inner ribbon scrollbar. */
+  --ribbon-track-min: calc(
+    (var(--ribbon-pad-y) * 2) + (var(--ribbon-count) * var(--ribbon-item-size)) +
+      ((var(--ribbon-count) - 1) * var(--ribbon-gap))
+  );
   --panel-width: min(420px, 46vw);
   --panel-duration: 240ms;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -130,15 +146,29 @@ code,
 }
 
 /*
- * Cell column + ribbon (+ expanded panel) as one shrink-wrapped cluster.
- * Lane height is owned by .main-window (in-flow). The side shell is absolute
- * with top/bottom:0 so the ribbon ends at the cell bottom — not the viewport.
+ * Outer cluster keeps action chrome + cell on the same 80ch column.
+ * Action chrome and the #N/Idle header sit outside the lane so the ribbon
+ * can match the code-area frame height exactly.
+ */
+.workspace-cluster {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
+  max-width: none;
+  vertical-align: top;
+}
+
+/*
+ * Code-area frame + ribbon (+ expanded panel) as one shrink-wrapped cluster.
+ * Lane height is owned by .main-window → .code-area only. The side shell is
+ * absolute with top/bottom:0 so ribbon corners are flush with the cell frame
+ * — not taller, not starting at the header or footnote.
  * Horizontal space for the ribbon/panel is reserved via padding-right.
  */
 .workspace-lane {
   position: relative;
-  display: inline-block;
-  vertical-align: top;
+  display: block;
   width: max-content;
   max-width: none;
   height: auto;
@@ -153,74 +183,88 @@ code,
 }
 
 .main-window {
-  display: flex;
-  flex-direction: column;
-  /* Height comes from toolbar + auto-sized cell; ribbon pins to this box. */
+  display: block;
+  /* Height comes from the code-area frame alone; ribbon pins to this box. */
   height: auto;
   /*
-   * Size the chrome column with the same mono metrics as .code-area so
-   * toolbar + ribbon sit flush with the 80-column writing surface.
+   * Size with the same mono metrics as .code-area so the frame + ribbon
+   * sit flush with the 80-column writing surface.
    * Never shrink below that width when a side panel opens.
    */
   font-family: var(--font-mono);
   font-size: 0.92rem;
-  width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
-  min-width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
+  width: var(--cell-frame-width, calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2)));
+  min-width: var(--cell-frame-width, calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2)));
   padding: 0;
   position: relative;
 }
 
 .main-actions {
   display: flex;
-  gap: 0.3rem;
+  align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  width: 100%;
-  margin-bottom: 0.4rem;
+  gap: 0.35rem 0.55rem;
+  /* Same mono metrics as .main-window so action chrome matches the 80ch cell. */
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.35rem;
+}
+
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .main-actions button {
-  padding: 0.28rem 0.55rem;
-  font-size: 0.8rem;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.78rem;
   border-radius: 6px;
+  line-height: 1.2;
+  font-family: var(--font-ui);
 }
 
 .cell-editor {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.28rem;
   flex: 0 0 auto;
   min-height: 0;
-  padding-top: 0.1rem;
-  width: 100%;
+  padding-top: 0;
+  width: max-content;
   max-width: 100%;
+  /* Mono metrics: --cell-frame-width resolves 80ch against the writing surface. */
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  --cell-frame-width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
 }
 
-.cell-toolbar {
+/* Compact status/header strip above the writing surface. */
+.cell-header {
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.28rem;
   flex-wrap: wrap;
-  width: 100%;
+  box-sizing: border-box;
+  width: var(--cell-frame-width);
+  max-width: 100%;
   min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0.05rem 0;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.15;
 }
 
-.cell-toolbar button {
-  padding: 0.28rem 0.55rem;
-  font-size: 0.8rem;
-  border-radius: 6px;
-}
-
-.cell-toolbar .cell-name-input {
-  font-size: 1.15rem;
-  padding: 0.1rem 0.3rem;
-}
-
-.cell-identity,
-.cell-actions,
 .stack-ops,
 .history-nav,
 .ai-compose {
@@ -232,46 +276,51 @@ code,
 .cell-index {
   font-family: var(--font-mono);
   color: var(--wood);
-  font-size: 0.85rem;
-}
-
-.cell-identity {
-  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .cell-name-input {
   border: 1px solid transparent;
   background: transparent;
   font-family: var(--font-display);
-  font-size: 1.35rem;
-  padding: 0.15rem 0.35rem;
-  border-radius: 6px;
-  min-width: 160px;
+  font-size: 0.95rem;
+  padding: 0;
+  border-radius: 4px;
+  min-width: 96px;
+  max-width: 100%;
+  flex: 0 1 auto;
   color: var(--ink);
   letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .cell-name-input:focus {
   outline: none;
   border-color: var(--line-strong);
   background: var(--bg-elevated);
+  padding: 0 0.25rem;
 }
 
 .code-area {
   /* Writing surface is exactly 80 monospace columns; padding sits outside. */
+  display: block;
   box-sizing: content-box;
   width: 80ch;
   max-width: none;
-  /* Height tracks content (CellEditor sets inline height); do not fill the viewport. */
-  flex: 0 0 auto;
-  align-self: stretch;
-  min-height: 220px;
-  resize: vertical;
-  overflow: auto;
+  /*
+   * Height tracks content (CellEditor sets inline height). No inner scroll —
+   * the workspace page scrolls with wheel/touch instead.
+   */
+  min-height: max(220px, var(--ribbon-track-min));
+  resize: none;
+  overflow: hidden;
   white-space: pre;
   tab-size: 2;
-  border-radius: var(--radius);
+  /* Left corners only — right edge meets the ribbon flush. */
+  border-radius: var(--radius) 0 0 var(--radius);
   border: var(--cell-border) solid var(--line);
+  border-right-color: transparent;
   background: var(--bg-code);
   padding: 1rem var(--cell-pad-x);
   font-family: var(--font-mono);
@@ -280,6 +329,7 @@ code,
   letter-spacing: 0;
   color: var(--ink);
   box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
+  margin: 0;
 }
 
 .code-area:focus {
@@ -290,31 +340,45 @@ code,
 
 .editor-footnote {
   margin: 0;
+  box-sizing: border-box;
+  width: var(--cell-frame-width);
+  max-width: 100%;
   color: var(--muted);
   font-family: var(--font-ui);
   font-size: 0.8rem;
 }
 
+.cell-editor > .cell-error {
+  box-sizing: border-box;
+  width: var(--cell-frame-width);
+  max-width: 100%;
+}
+
 .side-shell {
   position: absolute;
+  /* Flush with the code-area frame: same top, bottom, and height. */
   top: 0;
   right: 0;
   bottom: 0;
+  height: auto;
   display: flex;
   flex-direction: row;
   align-items: stretch;
   /* Width comes from ribbon + animated panel slot — never from the viewport. */
   width: var(--ribbon-width);
   /* Seam against the cell is drawn by the first visible child (panel or ribbon). */
-  border-left: none;
+  border-left: 1px solid var(--line);
   border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--bg-elevated);
+  /* Clip only horizontally during width animation; no nested scroll pane. */
   overflow: hidden;
   transition: width var(--panel-motion);
 }
 
 .side-shell.is-open {
   width: calc(var(--ribbon-width) + var(--panel-width));
+  /* Let long panel content flow; page/workspace scrolls — no inner pane. */
+  overflow: visible;
 }
 
 /* Slot owns the open/close width animation; panel inside stays a fixed width. */
@@ -336,6 +400,7 @@ code,
   width: var(--panel-width);
   opacity: 1;
   pointer-events: auto;
+  overflow: visible;
 }
 
 /* Ribbon stays at the far/right edge of the cluster (after the panel slot). */
@@ -344,16 +409,17 @@ code,
   flex: 0 0 var(--ribbon-width);
   align-self: stretch;
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.45rem 0.28rem;
+  gap: var(--ribbon-gap);
+  /* Tight inset so CE Cells sits at the cell-frame top corner. */
+  padding: var(--ribbon-pad-y) 0.28rem;
   background: #050505;
-  border-left: 1px solid var(--line);
+  border-left: none;
   z-index: 1;
-  /* Extra options scroll inside the ribbon if the cell is shorter than the list. */
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  /* No inner scrollbar — cell min-height fits the full ribbon track. */
+  overflow: hidden;
 }
 
 .ribbon-item {
@@ -361,10 +427,12 @@ code,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.08rem;
   width: 100%;
-  min-height: 48px;
-  padding: 0.4rem 0.15rem;
+  flex: 1 1 var(--ribbon-item-size);
+  min-height: 0;
+  max-height: var(--ribbon-item-size);
+  padding: 0.15rem 0.1rem;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -382,6 +450,17 @@ code,
   color: #1a1008;
   background: linear-gradient(180deg, var(--wood-bright), var(--wood));
   border-color: var(--wood-deep);
+}
+
+/* Cells is the primary side entry — subtle cue when the panel is collapsed. */
+.ribbon-item.is-primary:not(.is-active) {
+  color: var(--ink-soft);
+  border-color: rgba(196, 138, 58, 0.28);
+  background: rgba(196, 138, 58, 0.08);
+}
+
+.ribbon-item.is-primary:not(.is-active) .ribbon-short {
+  color: var(--wood-bright);
 }
 
 .ribbon-short {
@@ -402,10 +481,10 @@ code,
   box-sizing: border-box;
   width: var(--panel-width);
   min-width: var(--panel-width);
-  height: 100%;
+  height: auto;
   min-height: 100%;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-panel);
   border-left: 1px solid var(--line);
   /* Slide out from the cell toward the outer ribbon. */
@@ -447,12 +526,12 @@ code,
 }
 
 .side-panel-body {
-  overflow: auto;
+  overflow: visible;
   padding: 0.9rem 1rem;
 }
 
 .console-panel {
-  min-height: 240px;
+  min-height: 0;
 }
 
 .console-full {
@@ -465,9 +544,8 @@ code,
   font-family: var(--font-mono);
   font-size: 0.78rem;
   white-space: pre-wrap;
-  min-height: 240px;
-  max-height: calc(100vh - 10rem);
-  overflow: auto;
+  min-height: 0;
+  overflow: visible;
 }
 
 .stack-list,
@@ -525,12 +603,14 @@ code,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
-  padding: 0.12rem 0.45rem;
+  font-size: 0.62rem;
+  padding: 0.02rem 0.32rem;
   border-radius: 999px;
   background: rgba(242, 235, 227, 0.06);
   text-transform: capitalize;
   color: var(--muted);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
 }
 
 .status-dot {
@@ -600,8 +680,7 @@ code,
   font-family: var(--font-mono);
   font-size: 0.72rem;
   line-height: 1.45;
-  max-height: 240px;
-  overflow: auto;
+  overflow: visible;
 }
 
 .diff-remove {
@@ -789,8 +868,7 @@ code,
 }
 
 .table-scroll {
-  overflow: auto;
-  max-height: 340px;
+  overflow: visible;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg-code);
@@ -831,8 +909,7 @@ code,
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 320px;
-  overflow: auto;
+  overflow: visible;
 }
 
 .ai-bubble {
@@ -898,6 +975,11 @@ code,
     padding: 0.65rem 0.75rem 0.85rem;
   }
 
+  .workspace-cluster {
+    display: flex;
+    width: 100%;
+  }
+
   .workspace-lane,
   .workspace.panel-open .workspace-lane {
     display: flex;
@@ -917,10 +999,20 @@ code,
     min-height: 220px;
     /* Keep 80ch when possible; allow the page to scroll horizontally if needed. */
     width: 80ch;
+    border-radius: var(--radius);
+    border-right-color: var(--line);
   }
 
-  .cell-toolbar {
+  .main-actions,
+  .cell-header,
+  .editor-footnote,
+  .cell-editor > .cell-error {
     min-width: 0;
+    width: 100%;
+  }
+
+  .cell-editor {
+    width: 100%;
   }
 
   .side-shell,
@@ -940,10 +1032,11 @@ code,
 
   .side-ribbon {
     flex-direction: row;
+    flex-wrap: wrap;
     width: 100%;
     flex: 0 0 auto;
-    overflow-x: auto;
-    overflow-y: hidden;
+    height: auto;
+    overflow: visible;
     border-left: none;
     border-bottom: 1px solid var(--line);
     /* Keep the option ribbon above the panel on stacked mobile layout. */
@@ -962,12 +1055,9 @@ code,
   }
 
   .side-shell.is-open .side-panel-slot {
-    max-height: 70vh;
+    max-height: none;
     opacity: 1;
-    /* Cap height and scroll so long panel bodies stay reachable on mobile. */
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    overflow: visible;
   }
 
   .side-panel {
@@ -975,14 +1065,14 @@ code,
     min-width: 0;
     min-height: 0;
     height: auto;
-    max-height: 70vh;
+    max-height: none;
     border-right: none;
     transform: none;
   }
 
   .side-panel-body {
     min-height: 0;
-    overflow: auto;
+    overflow: visible;
   }
 
   .ribbon-item {
