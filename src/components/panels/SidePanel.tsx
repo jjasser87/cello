@@ -123,7 +123,7 @@ function CellsPanel({ api }: SidePanelProps) {
             >
               ↓
             </button>
-            <button type="button" onClick={() => deleteCell(cell.id)} disabled={state.cells.length <= 1}>
+            <button type="button" onClick={() => deleteCell(cell.id)} title="Delete cell">
               ×
             </button>
           </div>

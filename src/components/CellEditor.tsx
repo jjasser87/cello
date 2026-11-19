@@ -61,7 +61,7 @@ export function CellEditor({
           <button type="button" onClick={onAdd} title="Add cell below">
             + Cell
           </button>
-          <button type="button" onClick={onDelete} disabled={total <= 1} title="Delete cell">
+          <button type="button" onClick={onDelete} title="Delete cell">
             Delete
           </button>
           <button type="button" className="primary" onClick={onRun} title="Run cell (⌘/Ctrl+Enter)">
