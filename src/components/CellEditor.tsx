@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import type { Cell } from '../types'
 
 interface CellEditorProps {
@@ -7,9 +7,18 @@ interface CellEditorProps {
   onChange: (code: string) => void
   onRename: (name: string) => void
   onRun: () => void
+  /** Ribbon/panel cluster; height-pinned to the code frame only. */
+  sidePanel: ReactNode
 }
 
-export function CellEditor({ cell, index, onChange, onRename, onRun }: CellEditorProps) {
+export function CellEditor({
+  cell,
+  index,
+  onChange,
+  onRename,
+  onRun,
+  sidePanel,
+}: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -32,36 +41,45 @@ export function CellEditor({ cell, index, onChange, onRename, onRun }: CellEdito
         <StatusPill status={cell.status} />
       </div>
 
-      <textarea
-        ref={ref}
-        className="code-area"
-        cols={80}
-        spellCheck={false}
-        wrap="off"
-        value={cell.code}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-            event.preventDefault()
-            event.stopPropagation()
-            onRun()
-            return
-          }
-          // Keep Shift+Tab for focus navigation out of the editor.
-          if (event.key === 'Tab' && !event.shiftKey) {
-            event.preventDefault()
-            const target = event.currentTarget
-            const start = target.selectionStart
-            const end = target.selectionEnd
-            const next = `${cell.code.slice(0, start)}  ${cell.code.slice(end)}`
-            onChange(next)
-            requestAnimationFrame(() => {
-              target.selectionStart = target.selectionEnd = start + 2
-            })
-          }
-        }}
-        placeholder="// Write the focused cell here…"
-      />
+      {/*
+        Lane owns only the writing-surface frame. Header and footnote sit
+        outside so the ribbon top/bottom match the code-area edges exactly.
+      */}
+      <div className="workspace-lane">
+        <main className="main-window">
+          <textarea
+            ref={ref}
+            className="code-area"
+            cols={80}
+            spellCheck={false}
+            wrap="off"
+            value={cell.code}
+            onChange={(event) => onChange(event.target.value)}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                event.preventDefault()
+                event.stopPropagation()
+                onRun()
+                return
+              }
+              // Keep Shift+Tab for focus navigation out of the editor.
+              if (event.key === 'Tab' && !event.shiftKey) {
+                event.preventDefault()
+                const target = event.currentTarget
+                const start = target.selectionStart
+                const end = target.selectionEnd
+                const next = `${cell.code.slice(0, start)}  ${cell.code.slice(end)}`
+                onChange(next)
+                requestAnimationFrame(() => {
+                  target.selectionStart = target.selectionEnd = start + 2
+                })
+              }
+            }}
+            placeholder="// Write the focused cell here…"
+          />
+        </main>
+        {sidePanel}
+      </div>
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">

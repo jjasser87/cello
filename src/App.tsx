@@ -33,8 +33,8 @@ export default function App() {
     <div className="app-shell">
       <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
         {/*
-          Action chrome sits above the cell+ribbon lane so the ribbon head
-          lines up with the cell header — not with this global top row.
+          Action chrome sits above the cell. The ribbon is height-pinned to the
+          code-area frame only (see CellEditor workspace-lane), not this row.
         */}
         <div className="workspace-cluster">
           <div className="main-actions" role="toolbar" aria-label="Workspace and cell actions">
@@ -98,19 +98,14 @@ export default function App() {
             </div>
           </div>
 
-          <div className="workspace-lane">
-            <main className="main-window">
-              <CellEditor
-                cell={activeCell}
-                index={index}
-                onChange={api.updateActiveCode}
-                onRename={(name) => api.renameCell(activeCell.id, name)}
-                onRun={() => api.runCell(activeCell.id)}
-              />
-            </main>
-
-            <SidePanel api={api} />
-          </div>
+          <CellEditor
+            cell={activeCell}
+            index={index}
+            onChange={api.updateActiveCode}
+            onRename={(name) => api.renameCell(activeCell.id, name)}
+            onRun={() => api.runCell(activeCell.id)}
+            sidePanel={<SidePanel api={api} />}
+          />
         </div>
       </div>
     </div>
