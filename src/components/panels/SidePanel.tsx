@@ -48,7 +48,12 @@ export function SidePanel({ api }: SidePanelProps) {
         })}
       </nav>
 
-      {open ? (
+      {/* Keep mounted so width/opacity can animate closed as well as open. */}
+      <div
+        className="side-panel-slot"
+        aria-hidden={!open}
+        inert={!open ? true : undefined}
+      >
         <div className="side-panel">
           <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
           <div className="side-panel-body">
@@ -63,7 +68,7 @@ export function SidePanel({ api }: SidePanelProps) {
             {state.activePanel === 'ai' && <AiPanel api={api} />}
           </div>
         </div>
-      ) : null}
+      </div>
     </aside>
   )
 }
