@@ -132,12 +132,10 @@ code,
 }
 
 .main-actions {
-  position: absolute;
-  top: 0.75rem;
-  right: 0.85rem;
   display: flex;
   gap: 0.35rem;
-  z-index: 2;
+  flex-wrap: wrap;
+  margin-bottom: 0.55rem;
 }
 
 .cell-editor {
@@ -147,6 +145,8 @@ code,
   flex: 1;
   min-height: 0;
   padding-top: 0.15rem;
+  width: fit-content;
+  max-width: 100%;
 }
 
 .cell-toolbar {
@@ -154,7 +154,8 @@ code,
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
-  padding-right: 12.5rem;
+  width: 100%;
+  min-width: calc(80ch + 2.1rem + 2px);
 }
 
 .cell-identity,
@@ -810,13 +811,7 @@ code,
   }
 
   .cell-toolbar {
-    padding-right: 0;
-  }
-
-  .main-actions {
-    position: static;
-    justify-content: flex-end;
-    margin-bottom: 0.5rem;
+    min-width: 0;
   }
 
   .side-shell,
