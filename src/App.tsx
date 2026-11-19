@@ -1,0 +1,74 @@
+import { useEffect } from 'react'
+import { CellEditor } from './components/CellEditor'
+import { SidePanel } from './components/panels/SidePanel'
+import { useWorkspace } from './hooks/useWorkspace'
+
+export default function App() {
+  const api = useWorkspace()
+  const { state, activeCell, runCell } = api
+  const activeIndex = state.cells.findIndex((cell) => cell.id === activeCell.id)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
+      // CellEditor already handles this shortcut inside the textarea.
+      const target = event.target
+      if (
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return
+      }
+      event.preventDefault()
+      runCell()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [runCell])
+
+  return (
+    <div className="app-shell">
+      <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
+        <main className="main-window">
+          <div className="main-actions">
+            <button type="button" onClick={api.runAll} title="Run all cells in order">
+              Run all
+            </button>
+            <button type="button" onClick={api.resetKernel}>
+              Reset
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const blob = new Blob([api.exportScript()], { type: 'text/plain' })
+                const url = URL.createObjectURL(blob)
+                const anchor = document.createElement('a')
+                anchor.href = url
+                anchor.download = state.scriptPath
+                anchor.click()
+                URL.revokeObjectURL(url)
+              }}
+            >
+              Export
+            </button>
+          </div>
+
+          <CellEditor
+            cell={activeCell}
+            index={Math.max(0, activeIndex)}
+            total={state.cells.length}
+            onChange={api.updateActiveCode}
+            onRename={(name) => api.renameCell(activeCell.id, name)}
+            onRun={() => api.runCell(activeCell.id)}
+            onAdd={() => api.addCell(activeCell.id)}
+            onDelete={() => api.deleteCell(activeCell.id)}
+            onMove={(direction) => api.moveCell(activeCell.id, direction)}
+          />
+        </main>
+
+        <SidePanel api={api} />
+      </div>
+    </div>
+  )
+}
