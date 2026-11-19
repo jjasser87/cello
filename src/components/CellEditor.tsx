@@ -25,7 +25,8 @@ export function CellEditor({
     const el = ref.current
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${Math.max(220, el.scrollHeight)}px`
+    // Grow with content; CSS min-height keeps the ribbon track fully visible (no inner scroll).
+    el.style.height = `${Math.max(el.scrollHeight, 220)}px`
   }, [cell.code, cell.id])
 
   return (
