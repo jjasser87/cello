@@ -4,26 +4,12 @@ import type { Cell } from '../types'
 interface CellEditorProps {
   cell: Cell
   index: number
-  total: number
   onChange: (code: string) => void
   onRename: (name: string) => void
   onRun: () => void
-  onAdd: () => void
-  onDelete: () => void
-  onMove: (direction: -1 | 1) => void
 }
 
-export function CellEditor({
-  cell,
-  index,
-  total,
-  onChange,
-  onRename,
-  onRun,
-  onAdd,
-  onDelete,
-  onMove,
-}: CellEditorProps) {
+export function CellEditor({ cell, index, onChange, onRename, onRun }: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
@@ -35,39 +21,15 @@ export function CellEditor({
 
   return (
     <section className="cell-editor" aria-label={`Editing ${cell.name}`}>
-      <div className="cell-toolbar">
-        <div className="cell-identity">
-          <span className="cell-index">#{index + 1}</span>
-          <input
-            className="cell-name-input"
-            value={cell.name}
-            onChange={(event) => onRename(event.target.value)}
-            aria-label="Cell name"
-          />
-          <StatusPill status={cell.status} />
-        </div>
-        <div className="cell-actions">
-          <button type="button" onClick={() => onMove(-1)} disabled={index === 0} title="Move up">
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={() => onMove(1)}
-            disabled={index === total - 1}
-            title="Move down"
-          >
-            ↓
-          </button>
-          <button type="button" onClick={onAdd} title="Add cell below">
-            + Cell
-          </button>
-          <button type="button" onClick={onDelete} title="Delete cell">
-            Delete
-          </button>
-          <button type="button" className="primary" onClick={onRun} title="Run cell (⌘/Ctrl+Enter)">
-            Run
-          </button>
-        </div>
+      <div className="cell-header">
+        <span className="cell-index">#{index + 1}</span>
+        <input
+          className="cell-name-input"
+          value={cell.name}
+          onChange={(event) => onRename(event.target.value)}
+          aria-label="Cell name"
+        />
+        <StatusPill status={cell.status} />
       </div>
 
       <textarea

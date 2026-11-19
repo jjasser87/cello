@@ -130,15 +130,29 @@ code,
 }
 
 /*
+ * Outer cluster keeps action chrome + cell lane on the same 80ch column.
+ * Action chrome sits above the lane so the ribbon head meets the cell head,
+ * not the global top row.
+ */
+.workspace-cluster {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
+  max-width: none;
+  vertical-align: top;
+}
+
+/*
  * Cell column + ribbon (+ expanded panel) as one shrink-wrapped cluster.
  * Lane height is owned by .main-window (in-flow). The side shell is absolute
- * with top/bottom:0 so the ribbon ends at the cell bottom — not the viewport.
+ * with top/bottom:0 so the ribbon starts at the cell header and ends at the
+ * cell bottom — not the viewport or the global action row above.
  * Horizontal space for the ribbon/panel is reserved via padding-right.
  */
 .workspace-lane {
   position: relative;
-  display: inline-block;
-  vertical-align: top;
+  display: block;
   width: max-content;
   max-width: none;
   height: auto;
@@ -155,11 +169,11 @@ code,
 .main-window {
   display: flex;
   flex-direction: column;
-  /* Height comes from toolbar + auto-sized cell; ribbon pins to this box. */
+  /* Height comes from compact header + auto-sized cell; ribbon pins to this box. */
   height: auto;
   /*
    * Size the chrome column with the same mono metrics as .code-area so
-   * toolbar + ribbon sit flush with the 80-column writing surface.
+   * header + ribbon sit flush with the 80-column writing surface.
    * Never shrink below that width when a side panel opens.
    */
   font-family: var(--font-mono);
@@ -172,55 +186,63 @@ code,
 
 .main-actions {
   display: flex;
-  gap: 0.3rem;
+  align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  width: 100%;
-  margin-bottom: 0.4rem;
+  gap: 0.35rem 0.55rem;
+  /* Same mono metrics as .main-window so action chrome matches the 80ch cell. */
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  width: calc(80ch + (var(--cell-pad-x) * 2) + (var(--cell-border) * 2));
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 0.35rem;
+}
+
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-wrap: wrap;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 }
 
 .main-actions button {
-  padding: 0.28rem 0.55rem;
-  font-size: 0.8rem;
+  padding: 0.22rem 0.5rem;
+  font-size: 0.78rem;
   border-radius: 6px;
+  line-height: 1.2;
+  font-family: var(--font-ui);
 }
 
 .cell-editor {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.28rem;
   flex: 0 0 auto;
   min-height: 0;
-  padding-top: 0.1rem;
+  padding-top: 0;
   width: 100%;
   max-width: 100%;
 }
 
-.cell-toolbar {
+/* Compact status/header strip above the writing surface. */
+.cell-header {
   display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.28rem;
   flex-wrap: wrap;
   width: 100%;
   min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0.05rem 0;
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.15;
 }
 
-.cell-toolbar button {
-  padding: 0.28rem 0.55rem;
-  font-size: 0.8rem;
-  border-radius: 6px;
-}
-
-.cell-toolbar .cell-name-input {
-  font-size: 1.15rem;
-  padding: 0.1rem 0.3rem;
-}
-
-.cell-identity,
-.cell-actions,
 .stack-ops,
 .history-nav,
 .ai-compose {
@@ -232,29 +254,30 @@ code,
 .cell-index {
   font-family: var(--font-mono);
   color: var(--wood);
-  font-size: 0.85rem;
-}
-
-.cell-identity {
-  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  line-height: 1;
 }
 
 .cell-name-input {
   border: 1px solid transparent;
   background: transparent;
   font-family: var(--font-display);
-  font-size: 1.35rem;
-  padding: 0.15rem 0.35rem;
-  border-radius: 6px;
-  min-width: 160px;
+  font-size: 0.95rem;
+  padding: 0;
+  border-radius: 4px;
+  min-width: 96px;
+  max-width: 100%;
+  flex: 0 1 auto;
   color: var(--ink);
   letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .cell-name-input:focus {
   outline: none;
   border-color: var(--line-strong);
   background: var(--bg-elevated);
+  padding: 0 0.25rem;
 }
 
 .code-area {
@@ -346,8 +369,9 @@ code,
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.45rem 0.28rem;
+  gap: 0.15rem;
+  /* Top padding matches .cell-header so CE Cells sits beside the cell head. */
+  padding: 0.05rem 0.28rem 0.35rem;
   background: #050505;
   border-left: 1px solid var(--line);
   z-index: 1;
@@ -361,10 +385,10 @@ code,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
+  gap: 0.12rem;
   width: 100%;
-  min-height: 48px;
-  padding: 0.4rem 0.15rem;
+  min-height: 44px;
+  padding: 0.32rem 0.12rem;
   border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
@@ -382,6 +406,17 @@ code,
   color: #1a1008;
   background: linear-gradient(180deg, var(--wood-bright), var(--wood));
   border-color: var(--wood-deep);
+}
+
+/* Cells is the primary side entry — subtle cue when the panel is collapsed. */
+.ribbon-item.is-primary:not(.is-active) {
+  color: var(--ink-soft);
+  border-color: rgba(196, 138, 58, 0.28);
+  background: rgba(196, 138, 58, 0.08);
+}
+
+.ribbon-item.is-primary:not(.is-active) .ribbon-short {
+  color: var(--wood-bright);
 }
 
 .ribbon-short {
@@ -525,12 +560,14 @@ code,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.7rem;
-  padding: 0.12rem 0.45rem;
+  font-size: 0.62rem;
+  padding: 0.02rem 0.32rem;
   border-radius: 999px;
   background: rgba(242, 235, 227, 0.06);
   text-transform: capitalize;
   color: var(--muted);
+  line-height: 1.2;
+  letter-spacing: 0.01em;
 }
 
 .status-dot {
@@ -898,6 +935,11 @@ code,
     padding: 0.65rem 0.75rem 0.85rem;
   }
 
+  .workspace-cluster {
+    display: flex;
+    width: 100%;
+  }
+
   .workspace-lane,
   .workspace.panel-open .workspace-lane {
     display: flex;
@@ -919,7 +961,8 @@ code,
     width: 80ch;
   }
 
-  .cell-toolbar {
+  .main-actions,
+  .cell-header {
     min-width: 0;
   }
 

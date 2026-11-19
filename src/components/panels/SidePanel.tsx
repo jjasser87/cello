@@ -57,13 +57,14 @@ export function SidePanel({ api }: SidePanelProps) {
       <nav className="side-ribbon" aria-label="Panel options">
         {RIBBON_ITEMS.map((item) => {
           const active = open && state.activePanel === item.id
+          const isPrimary = item.id === 'cells'
           return (
             <button
               key={item.id}
               type="button"
-              className={`ribbon-item ${active ? 'is-active' : ''}`}
+              className={`ribbon-item ${active ? 'is-active' : ''} ${isPrimary ? 'is-primary' : ''}`}
               aria-pressed={active}
-              title={item.label}
+              title={isPrimary ? `${item.label} — start here` : item.label}
               onClick={() => toggleSidePanel(item.id)}
             >
               <span className="ribbon-short">{item.short}</span>
