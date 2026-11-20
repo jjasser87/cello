@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
+import { findRscript } from './findRscript.ts'
 
 export type KernelLanguage = 'r' | 'javascript'
 
@@ -62,28 +63,8 @@ async function pathExists(target: string): Promise<boolean> {
 }
 
 async function whichRscript(): Promise<string | null> {
-  const candidates = ['Rscript', '/usr/bin/Rscript', '/usr/local/bin/Rscript']
-  for (const candidate of candidates) {
-    if (candidate === 'Rscript') {
-      // Resolve via `command -v` in a tiny probe below.
-      continue
-    }
-    if (await pathExists(candidate)) return candidate
-  }
-
-  return await new Promise((resolve) => {
-    const child = spawn('bash', ['-lc', 'command -v Rscript'], {
-      stdio: ['ignore', 'pipe', 'ignore'],
-    })
-    let out = ''
-    child.stdout.on('data', (chunk: Buffer) => {
-      out += chunk.toString('utf8')
-    })
-    child.on('close', (code) => {
-      const found = out.trim()
-      resolve(code === 0 && found ? found : null)
-    })
-  })
+  // Node PATH walk — no bash/cmd/sh. Soft-null when R is absent (Windows-safe).
+  return findRscript()
 }
 
 async function ensureJsonlite(rscript: string): Promise<void> {
