@@ -51,10 +51,11 @@ API used by the UI (dev server only):
 
 ## Develop (JS-only fallback)
 
-If R is not installed, switch **Lang** to **JS**. The in-browser kernel still runs `console`, `cello.plot`, and `cello.table`. Console will note that the R kernel is unavailable.
+If R is not installed, switch **Lang** to **JS**. The in-browser kernel still runs `console`, `cello.plot`, and `cello.table`. Console will note that the R kernel is unavailable. Vite itself does not require bash or R to start — `Rscript` is found via a Node PATH walk (Windows-safe).
 
 ```bash
 npm install
+npm run test:rscript-lookup
 npm run dev
 npm run build
 ```
