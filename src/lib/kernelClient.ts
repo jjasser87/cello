@@ -94,8 +94,24 @@ function normalizeKind(kind: string): EnvBinding['kind'] {
   }
 }
 
+/** Mirror of server/normalizeRSource.ts — keep CRLF/BOM out of R parse(text=). */
+function normalizeRSource(code: string): string {
+  let text = String(code ?? '')
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
 async function parseResponse(res: Response): Promise<ApiRunResult & KernelStatus> {
-  const body = (await res.json()) as ApiRunResult & KernelStatus
+  const raw = await res.text()
+  let body: ApiRunResult & KernelStatus
+  try {
+    body = (raw.trim() ? JSON.parse(raw) : {}) as ApiRunResult & KernelStatus
+  } catch {
+    const preview = raw.slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(
+      `R kernel returned non-JSON (${res.status}${res.headers.get('content-type') ? ` ${res.headers.get('content-type')}` : ''}): ${preview || '(empty)'}`,
+    )
+  }
   if (!res.ok) {
     const message = body.error || body.message || `Kernel request failed (${res.status})`
     throw new Error(message)
@@ -124,7 +140,7 @@ export async function evalOnRKernel(code: string, cellId: string): Promise<RunAr
   const res = await fetch('/api/kernel/eval', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code, cellId }),
+    body: JSON.stringify({ code: normalizeRSource(code), cellId }),
   })
   const body = await parseResponse(res)
   return toArtifacts(body, cellId)
@@ -146,7 +162,12 @@ export async function runAllOnRKernel(
   const res = await fetch('/api/kernel/run-all', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cells }),
+    body: JSON.stringify({
+      cells: cells.map((cell) => ({
+        id: cell.id,
+        code: normalizeRSource(cell.code),
+      })),
+    }),
   })
   const body = (await parseResponse(res)) as {
     results?: ApiRunResult[]

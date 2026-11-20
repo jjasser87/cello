@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { findRscript } from './findRscript.ts'
+import { normalizeRSource } from './normalizeRSource.ts'
 
 export type KernelLanguage = 'r' | 'javascript'
 
@@ -260,13 +261,20 @@ class RKernelProcess {
         reject(new Error('R kernel request timed out'))
       }, REQUEST_TIMEOUT_MS)
       this.pending.set(id, { resolve, reject, timer })
-      this.child!.stdin.write(`${JSON.stringify(payload)}\n`)
+      // UTF-8 bytes only — avoid locale-dependent stdin encoding on Windows.
+      const line = Buffer.from(`${JSON.stringify(payload)}\n`, 'utf8')
+      this.child!.stdin.write(line)
     })
   }
 
   async eval(code: string, cellId: string): Promise<KernelRunResult> {
     await this.ensureStarted()
-    const msg = await this.send({ op: 'eval', id: createId(), code, cellId })
+    const msg = await this.send({
+      op: 'eval',
+      id: createId(),
+      code: normalizeRSource(code),
+      cellId,
+    })
     return normalizeResult(msg)
   }
 
@@ -444,7 +452,10 @@ export function rKernelPlugin(): Plugin {
             }
             const cells = Array.isArray(body.cells) ? body.cells : []
             const result = await kernel.runAll(
-              cells.map((cell) => ({ id: String(cell.id), code: String(cell.code ?? '') })),
+              cells.map((cell) => ({
+                id: String(cell.id),
+                code: normalizeRSource(String(cell.code ?? '')),
+              })),
             )
             sendJson(res, 200, result)
             return

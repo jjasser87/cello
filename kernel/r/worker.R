@@ -243,10 +243,24 @@ reset_kernel <- function() {
   clear_artifacts()
 }
 
+# R's parse(text=) rejects bare CR. Windows CRLF / old-Mac CR / UTF-8 BOM
+# must be normalized before parsing or every multi-line cell fails.
+normalize_source <- function(code) {
+  if (is.null(code)) return("")
+  text <- paste(as.character(code), collapse = "\n")
+  # Strip UTF-8 BOM (U+FEFF) if present.
+  if (nzchar(text) && identical(substr(text, 1L, 1L), "\ufeff")) {
+    text <- substr(text, 2L, nchar(text, type = "chars"))
+  }
+  text <- gsub("\r\n", "\n", text, fixed = TRUE)
+  text <- gsub("\r", "\n", text, fixed = TRUE)
+  text
+}
+
 run_eval <- function(req) {
   clear_artifacts()
   cell_id <- if (is.null(req$cellId)) "" else as.character(req$cellId)
-  code <- if (is.null(req$code)) "" else as.character(req$code)
+  code <- normalize_source(if (is.null(req$code)) "" else req$code)
 
   err <- NULL
   output_lines <- character(0)
@@ -257,7 +271,7 @@ run_eval <- function(req) {
         {
           withCallingHandlers(
             {
-              expr <- parse(text = code)
+              expr <- parse(text = code, encoding = "UTF-8")
               result <- withVisible(eval(expr, envir = .GlobalEnv, enclos = .GlobalEnv))
               if (isTRUE(result$visible)) {
                 print(result$value)
@@ -314,12 +328,20 @@ emit(list(
 ))
 
 local({
-  stdin_con <- file("stdin", open = "r", blocking = TRUE)
+  # Explicit UTF-8 so Windows system code pages don't reinterpret NDJSON bytes.
+  stdin_con <- tryCatch(
+    file("stdin", open = "r", blocking = TRUE, encoding = "UTF-8"),
+    error = function(e) file("stdin", open = "r", blocking = TRUE)
+  )
   on.exit(try(close(stdin_con), silent = TRUE), add = TRUE)
 
   repeat {
-    line <- readLines(stdin_con, n = 1L, warn = FALSE)
+    line <- readLines(stdin_con, n = 1L, warn = FALSE, encoding = "UTF-8")
     if (length(line) == 0L) break
+    # Defend against BOM on the first protocol line (some Windows pipes).
+    if (identical(substr(line, 1L, 1L), "\ufeff")) {
+      line <- substr(line, 2L, nchar(line, type = "chars"))
+    }
     if (!nzchar(line)) next
 
     req <- tryCatch(fromJSON(line, simplifyVector = FALSE), error = function(e) NULL)

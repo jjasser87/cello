@@ -55,10 +55,13 @@ If R is not installed, switch **Lang** to **JS**. The in-browser kernel still ru
 
 ```bash
 npm install
-npm run test:rscript-lookup
+npm run test:server
 npm run dev
 npm run build
 ```
+
+Cell source is normalized (CRLF → LF, strip BOM) before R `parse()`, so Windows line endings in the editor do not break eval.
+
 
 ## Architecture (short)
 
