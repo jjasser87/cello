@@ -29,88 +29,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [runCell])
 
+  const exportScript = () => {
+    const blob = new Blob([api.exportScript()], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = state.scriptPath
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="app-shell">
       <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
-        {/*
-          Action chrome sits above the cell. The ribbon is height-pinned to the
-          code-area frame only (see CellEditor workspace-lane), not this row.
-        */}
         <div className="workspace-cluster">
-          <div className="main-actions" role="toolbar" aria-label="Workspace and cell actions">
-            <div className="action-group">
-              <label className="language-picker" title="Cell language / kernel">
-                <span className="language-picker-label">Lang</span>
-                <select
-                  value={state.language}
-                  onChange={(event) =>
-                    api.setLanguage(event.target.value === 'javascript' ? 'javascript' : 'r')
-                  }
-                  aria-label="Kernel language"
-                >
-                  <option value="r">R</option>
-                  <option value="javascript">JS</option>
-                </select>
-              </label>
-              <button type="button" onClick={() => void api.runAll()} title="Run all cells in order">
-                Run all
-              </button>
-              <button type="button" onClick={() => void api.resetKernel()}>
-                Reset
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const blob = new Blob([api.exportScript()], { type: 'text/plain' })
-                  const url = URL.createObjectURL(blob)
-                  const anchor = document.createElement('a')
-                  anchor.href = url
-                  anchor.download = state.scriptPath
-                  anchor.click()
-                  URL.revokeObjectURL(url)
-                }}
-              >
-                Export
-              </button>
-            </div>
-            <div className="action-group">
-              <button
-                type="button"
-                onClick={() => api.moveCell(activeCell.id, -1)}
-                disabled={index === 0}
-                title="Move up"
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                onClick={() => api.moveCell(activeCell.id, 1)}
-                disabled={index === total - 1}
-                title="Move down"
-              >
-                ↓
-              </button>
-              <button type="button" onClick={() => api.addCell(activeCell.id)} title="Add cell below">
-                + Cell
-              </button>
-              <button
-                type="button"
-                onClick={() => api.deleteCell(activeCell.id)}
-                title="Delete cell"
-              >
-                Delete
-              </button>
-              <button
-                type="button"
-                className="primary"
-                onClick={() => void api.runCell(activeCell.id)}
-                title="Run cell (⌘/Ctrl+Enter)"
-              >
-                Run
-              </button>
-            </div>
-          </div>
-
           <CellEditor
             cell={activeCell}
             index={index}
@@ -125,6 +57,97 @@ export default function App() {
             onChange={api.updateActiveCode}
             onRename={(name) => api.renameCell(activeCell.id, name)}
             onRun={() => void api.runCell(activeCell.id)}
+            toolbar={
+              <div className="cell-toolbar" role="toolbar" aria-label="Cell actions">
+                <label className="tool-lang" title="Cell language / kernel">
+                  <span className="visually-hidden">Language</span>
+                  <select
+                    value={state.language}
+                    onChange={(event) =>
+                      api.setLanguage(event.target.value === 'javascript' ? 'javascript' : 'r')
+                    }
+                    aria-label="Kernel language"
+                  >
+                    <option value="r">R</option>
+                    <option value="javascript">JS</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="tool-icon primary"
+                  onClick={() => void api.runCell(activeCell.id)}
+                  title="Run cell (⌘/Ctrl+Enter)"
+                  aria-label="Run cell"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => void api.runAll()}
+                  title="Run all cells in order"
+                  aria-label="Run all"
+                >
+                  ⏭
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => api.moveCell(activeCell.id, -1)}
+                  disabled={index === 0}
+                  title="Move up"
+                  aria-label="Move cell up"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => api.moveCell(activeCell.id, 1)}
+                  disabled={index === total - 1}
+                  title="Move down"
+                  aria-label="Move cell down"
+                >
+                  ↓
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => api.addCell(activeCell.id)}
+                  title="Add cell below"
+                  aria-label="Add cell"
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => api.deleteCell(activeCell.id)}
+                  title="Delete cell"
+                  aria-label="Delete cell"
+                >
+                  ×
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={() => void api.resetKernel()}
+                  title="Reset kernel"
+                  aria-label="Reset kernel"
+                >
+                  ↺
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
+                  onClick={exportScript}
+                  title="Export script"
+                  aria-label="Export script"
+                >
+                  ⇩
+                </button>
+              </div>
+            }
             sidePanel={<SidePanel api={api} />}
           />
         </div>

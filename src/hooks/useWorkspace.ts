@@ -138,6 +138,18 @@ function applyRunToState(
     sidePanelOpen = true
   }
 
+  const cellConsoleChunk = result.logs.length
+    ? result.logs
+    : [result.error ? `Error: ${result.error}` : '(no output)']
+  const cellPlotId =
+    result.plot?.id ??
+    [...plots].reverse().find((plot) => plot.cellId === cellId)?.id ??
+    null
+  const cellTableId =
+    result.table?.id ??
+    [...tables].reverse().find((table) => table.cellId === cellId)?.id ??
+    null
+
   return {
     ...prev,
     cells: prev.cells.map((item) =>
@@ -147,22 +159,21 @@ function applyRunToState(
             status: result.error ? 'error' : 'ok',
             error: result.error,
             lastRunAt: Date.now(),
+            consoleLines: [...(item.consoleLines ?? []), ...cellConsoleChunk].slice(-200),
           }
         : item,
     ),
     history,
     historyIndex: history.length - 1,
     plots,
-    activePlotId: result.plot?.id ?? prev.activePlotId,
+    activePlotId: cellPlotId,
     tables,
-    activeTableId: result.table?.id ?? prev.activeTableId,
+    activeTableId: cellTableId,
     env: result.env,
     consoleLines: [
       ...prev.consoleLines,
       `▸ ${cellName}`,
-      ...(result.logs.length
-        ? result.logs
-        : [result.error ? `Error: ${result.error}` : '(no output)']),
+      ...cellConsoleChunk,
     ].slice(-200),
     activePanel,
     sidePanelOpen,
@@ -271,12 +282,23 @@ export function useWorkspace() {
   }, [])
 
   const selectCell = useCallback((cellId: string, panel?: PanelId) => {
-    setState((prev) => ({
-      ...prev,
-      activeCellId: cellId,
-      activePanel: panel ?? prev.activePanel,
-      sidePanelOpen: panel ? true : prev.sidePanelOpen,
-    }))
+    setState((prev) => {
+      const cellPlots = prev.plots.filter((plot) => plot.cellId === cellId)
+      const cellTables = prev.tables.filter((table) => table.cellId === cellId)
+      const cellHistory = prev.history.filter((entry) => entry.cellId === cellId)
+      const latestHistory = cellHistory[cellHistory.length - 1]
+      return {
+        ...prev,
+        activeCellId: cellId,
+        activePanel: panel ?? prev.activePanel,
+        sidePanelOpen: panel ? true : prev.sidePanelOpen,
+        activePlotId: cellPlots[cellPlots.length - 1]?.id ?? null,
+        activeTableId: cellTables[cellTables.length - 1]?.id ?? null,
+        historyIndex: latestHistory
+          ? prev.history.findIndex((entry) => entry.id === latestHistory.id)
+          : -1,
+      }
+    })
   }, [])
 
   const updateActiveCode = useCallback((code: string) => {
@@ -528,13 +550,21 @@ export function useWorkspace() {
             sidePanelOpen = true
           }
 
+          const lastCellId = cells[results.length - 1]?.id
+          const lastCellPlots = lastCellId
+            ? plots.filter((plot) => plot.cellId === lastCellId)
+            : []
+          const lastCellTables = lastCellId
+            ? tables.filter((table) => table.cellId === lastCellId)
+            : []
+
           return {
             ...prev,
             env: last?.env ?? [],
             plots,
             tables,
-            activePlotId: last?.plot?.id ?? prev.activePlotId,
-            activeTableId: last?.table?.id ?? prev.activeTableId,
+            activePlotId: lastCellPlots[lastCellPlots.length - 1]?.id ?? null,
+            activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
             history: historyCursor,
             historyIndex: historyCursor.length - 1,
             consoleLines: [
@@ -551,11 +581,18 @@ export function useWorkspace() {
               if (!batch) {
                 return { ...cell, status: 'idle', error: undefined }
               }
+              const result = results[cells.findIndex((item) => item.id === cell.id)]
+              const chunk = result
+                ? result.logs.length
+                  ? result.logs
+                  : [result.error ? `Error: ${result.error}` : '(no output)']
+                : []
               return {
                 ...cell,
                 status: batch.status,
                 error: batch.error,
                 lastRunAt: Date.now(),
+                consoleLines: [...(cell.consoleLines ?? []), ...chunk].slice(-200),
               }
             }),
           }
@@ -656,13 +693,21 @@ export function useWorkspace() {
 
           const statusById = new Map(batches.map((batch) => [batch.cellId, batch]))
 
+          const lastCellId = last?.cellId
+          const lastCellPlots = lastCellId
+            ? plots.filter((plot) => plot.cellId === lastCellId)
+            : []
+          const lastCellTables = lastCellId
+            ? tables.filter((table) => table.cellId === lastCellId)
+            : []
+
           return {
             ...prev,
             env: last?.env ?? [],
             plots,
             tables,
-            activePlotId: last?.plot?.id ?? prev.activePlotId,
-            activeTableId: last?.table?.id ?? prev.activeTableId,
+            activePlotId: lastCellPlots[lastCellPlots.length - 1]?.id ?? null,
+            activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
             history,
             historyIndex: history.length - 1,
             consoleLines,
@@ -673,11 +718,15 @@ export function useWorkspace() {
               if (!batch) {
                 return { ...cell, status: 'idle', error: undefined }
               }
+              const chunk = batch.logs.length
+                ? batch.logs
+                : [batch.error ? `Error: ${batch.error}` : '(no output)']
               return {
                 ...cell,
                 status: batch.status,
                 error: batch.error,
                 lastRunAt: Date.now(),
+                consoleLines: [...(cell.consoleLines ?? []), ...chunk].slice(-200),
               }
             }),
           }
@@ -722,7 +771,12 @@ export function useWorkspace() {
       activePlotId: null,
       activeTableId: null,
       consoleLines: ['Kernel cleared.'],
-      cells: prev.cells.map((cell) => ({ ...cell, status: 'idle', error: undefined })),
+      cells: prev.cells.map((cell) => ({
+        ...cell,
+        status: 'idle',
+        error: undefined,
+        consoleLines: [],
+      })),
     }))
   }, [])
 

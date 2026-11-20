@@ -9,6 +9,8 @@ interface CellEditorProps {
   onChange: (code: string) => void
   onRename: (name: string) => void
   onRun: () => void
+  /** Compact action icons beside the title. */
+  toolbar: ReactNode
   /** Ribbon/panel cluster; height-pinned to the code frame only. */
   sidePanel: ReactNode
 }
@@ -21,6 +23,7 @@ export function CellEditor({
   onChange,
   onRename,
   onRun,
+  toolbar,
   sidePanel,
 }: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
@@ -44,6 +47,7 @@ export function CellEditor({
           aria-label="Cell name"
         />
         <StatusPill status={cell.status} />
+        {toolbar}
       </div>
 
       {/*
