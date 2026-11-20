@@ -1,12 +1,20 @@
-import type { Cell } from '../types'
+import type { Cell, KernelLanguage } from '../types'
 
-/** Accept both `// %%` (valid JS) and legacy `# %%` markers. */
+/** Accept both `// %%` (valid JS) and `# %%` (R / Python-style) markers. */
 const CELL_RE = /^(?:\/\/|#)\s*%%\s*(.*)$/
 
-export function cellsToScript(cells: Cell[]): string {
+export function cellMarker(language: KernelLanguage, name = ''): string {
+  const label = name.trim()
+  if (language === 'r') {
+    return label ? `# %% ${label}` : '# %%'
+  }
+  return label ? `// %% ${label}` : '// %%'
+}
+
+export function cellsToScript(cells: Cell[], language: KernelLanguage = 'javascript'): string {
   return cells
     .map((cell) => {
-      const header = cell.name.trim() ? `// %% ${cell.name.trim()}` : '// %%'
+      const header = cellMarker(language, cell.name)
       return `${header}\n${cell.code.replace(/\s+$/, '')}`
     })
     .join('\n\n')
@@ -54,7 +62,7 @@ export function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`
 }
 
-export const STARTER_SCRIPT = `// %% Load sample data
+export const STARTER_SCRIPT_JS = `// %% Load sample data
 const sales = [
   { month: "Jan", revenue: 42, region: "North" },
   { month: "Feb", revenue: 51, region: "North" },
@@ -88,3 +96,46 @@ const south = sales.filter((row) => row.region === "South");
 cello.table(south, "south_sales");
 console.log("South months:", south.map((row) => row.month).join(", "));
 `
+
+export const STARTER_SCRIPT_R = `# %% Load sample data
+sales <- data.frame(
+  month = c("Jan", "Feb", "Mar", "Apr", "May", "Jun"),
+  revenue = c(42, 51, 47, 63, 58, 71),
+  region = c("North", "North", "South", "South", "North", "South"),
+  stringsAsFactors = FALSE
+)
+
+cello.table(sales, "sales")
+console$log("Loaded", nrow(sales), "rows")
+
+# %% Summarize by month
+total <- sum(sales$revenue)
+average <- mean(sales$revenue)
+
+console$log("Total revenue:", total)
+console$log("Average:", round(average, 1))
+
+# %% Plot revenue
+cello.plot(list(
+  title = "Monthly revenue",
+  kind = "bar",
+  labels = sales$month,
+  values = sales$revenue
+))
+
+# %% Spotlight a region
+south <- subset(sales, region == "South")
+cello.table(south, "south_sales")
+console$log("South months:", paste(south$month, collapse = ", "))
+`
+
+/** @deprecated Prefer STARTER_SCRIPT_JS / STARTER_SCRIPT_R */
+export const STARTER_SCRIPT = STARTER_SCRIPT_JS
+
+export function starterScript(language: KernelLanguage): string {
+  return language === 'r' ? STARTER_SCRIPT_R : STARTER_SCRIPT_JS
+}
+
+export function defaultScriptPath(language: KernelLanguage): string {
+  return language === 'r' ? 'analysis.R' : 'analysis.js'
+}

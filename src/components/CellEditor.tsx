@@ -1,9 +1,11 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import type { Cell } from '../types'
+import type { Cell, KernelLanguage } from '../types'
 
 interface CellEditorProps {
   cell: Cell
   index: number
+  language: KernelLanguage
+  kernelHint?: string
   onChange: (code: string) => void
   onRename: (name: string) => void
   onRun: () => void
@@ -14,6 +16,8 @@ interface CellEditorProps {
 export function CellEditor({
   cell,
   index,
+  language,
+  kernelHint,
   onChange,
   onRename,
   onRun,
@@ -76,7 +80,11 @@ export function CellEditor({
                 })
               }
             }}
-            placeholder="// Write the focused cell here…"
+            placeholder={
+              language === 'r'
+                ? '# Write the focused R cell here…'
+                : '// Write the focused cell here…'
+            }
           />
         </main>
         {sidePanel}
@@ -84,7 +92,8 @@ export function CellEditor({
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">
-        <code>// %%</code> cells · 80-column writing surface · ⌘/Ctrl+Enter to run · ribbon for the rest
+        <code>{language === 'r' ? '# %%' : '// %%'}</code> cells · 80-column writing surface ·
+        ⌘/Ctrl+Enter to run · {kernelHint ?? (language === 'r' ? 'R' : 'JS')} · ribbon for the rest
       </p>
     </section>
   )

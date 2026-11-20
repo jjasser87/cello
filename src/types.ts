@@ -9,6 +9,8 @@ export type PanelId =
   | 'ai'
   | 'console'
 
+export type KernelLanguage = 'r' | 'javascript'
+
 export type CellStatus = 'idle' | 'running' | 'ok' | 'error'
 
 export interface Cell {
@@ -71,6 +73,12 @@ export interface WorkspaceState {
   activeCellId: string
   activePanel: PanelId
   sidePanelOpen: boolean
+  language: KernelLanguage
+  kernelStatus: {
+    available: boolean
+    version: string | null
+    message: string | null
+  }
   history: HistoryEntry[]
   historyIndex: number
   plots: PlotSpec[]
