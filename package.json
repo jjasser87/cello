@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts"
+    "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts",
+    "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
+    "test:server": "node --experimental-strip-types --test server/*.test.ts"
   },
   "dependencies": {
     "react": "^19.3.1",

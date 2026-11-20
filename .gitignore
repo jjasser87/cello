@@ -15,6 +15,9 @@ dist-ssr
 # Local R package library created by the kernel host
 kernel/r/.lib/
 
+# Accidental base-R graphics output from local smoke tests
+Rplots.pdf
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
