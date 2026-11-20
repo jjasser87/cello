@@ -20,6 +20,8 @@ export interface Cell {
   status: CellStatus
   error?: string
   lastRunAt?: number
+  /** Console stream for this cell only (panel shows selected cell). */
+  consoleLines?: string[]
 }
 
 export interface HistoryEntry {

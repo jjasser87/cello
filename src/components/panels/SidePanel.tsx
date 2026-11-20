@@ -48,7 +48,7 @@ export function SidePanel({ api }: SidePanelProps) {
             {state.activePanel === 'env' && <EnvPanel api={api} />}
             {state.activePanel === 'data' && <DataPanel api={api} />}
             {state.activePanel === 'structure' && <StructurePanel api={api} />}
-            {state.activePanel === 'console' && <ConsolePanel lines={state.consoleLines} />}
+            {state.activePanel === 'console' && <ConsolePanel api={api} />}
             {state.activePanel === 'ai' && <AiPanel api={api} />}
           </div>
         </div>
@@ -80,13 +80,13 @@ export function SidePanel({ api }: SidePanelProps) {
 function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => void }) {
   const titles: Record<PanelId, { title: string; blurb: string }> = {
     cells: { title: 'Cells', blurb: 'Order determines script flow.' },
-    history: { title: 'History', blurb: 'Red left, green right.' },
-    plot: { title: 'Plot', blurb: 'Opens when a cell plots.' },
+    history: { title: 'History', blurb: 'Runs for the selected cell.' },
+    plot: { title: 'Plot', blurb: 'Plot from the selected cell.' },
     files: { title: 'Files', blurb: 'Project tree.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
-    data: { title: 'Data', blurb: 'Tables from cello.table().' },
+    data: { title: 'Data', blurb: 'Table from the selected cell.' },
     structure: { title: 'Script flow', blurb: 'Where this cell sits.' },
-    console: { title: 'Console', blurb: 'Kernel output for recent runs.' },
+    console: { title: 'Console', blurb: 'Output for the selected cell.' },
     ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
   const copy = titles[panel]
@@ -117,6 +117,7 @@ function CellsPanel({ api }: SidePanelProps) {
             <input
               value={cell.name}
               onClick={(event) => event.stopPropagation()}
+              onFocus={() => selectCell(cell.id)}
               onChange={(event) => renameCell(cell.id, event.target.value)}
             />
             <span className={`status-dot status-${cell.status}`} />
@@ -147,20 +148,33 @@ function CellsPanel({ api }: SidePanelProps) {
 
 function HistoryPanel({ api }: SidePanelProps) {
   const { state, setHistoryIndex, restoreHistoryCode } = api
-  if (state.history.length === 0) {
-    return <EmptyState text="Run a cell to start building execution history." />
+  const cellHistory = state.history.filter((entry) => entry.cellId === state.activeCellId)
+  if (cellHistory.length === 0) {
+    return <EmptyState text="No history for this cell yet. Run it to start building history." />
   }
-  const index = state.historyIndex < 0 ? state.history.length - 1 : state.historyIndex
-  const entry = state.history[index]
+  const current =
+    state.historyIndex >= 0 ? state.history[state.historyIndex] : undefined
+  let localIndex = cellHistory.length - 1
+  if (current && current.cellId === state.activeCellId) {
+    const match = cellHistory.findIndex((entry) => entry.id === current.id)
+    if (match >= 0) localIndex = match
+  }
+  const entry = cellHistory[localIndex]
   const lines = diffLines(entry.previousCode, entry.code)
+  const goToLocal = (nextLocal: number) => {
+    const target = cellHistory[nextLocal]
+    if (!target) return
+    const globalIndex = state.history.findIndex((item) => item.id === target.id)
+    if (globalIndex >= 0) setHistoryIndex(globalIndex)
+  }
 
   return (
     <div className="history-panel">
       <div className="history-nav">
         <button
           type="button"
-          onClick={() => setHistoryIndex(index - 1)}
-          disabled={index <= 0}
+          onClick={() => goToLocal(localIndex - 1)}
+          disabled={localIndex <= 0}
           aria-label="Previous version"
         >
           ←
@@ -168,13 +182,14 @@ function HistoryPanel({ api }: SidePanelProps) {
         <div>
           <strong>{entry.cellName}</strong>
           <div className="muted">
-            {index + 1} / {state.history.length} · {new Date(entry.timestamp).toLocaleTimeString()}
+            {localIndex + 1} / {cellHistory.length} ·{' '}
+            {new Date(entry.timestamp).toLocaleTimeString()}
           </div>
         </div>
         <button
           type="button"
-          onClick={() => setHistoryIndex(index + 1)}
-          disabled={index >= state.history.length - 1}
+          onClick={() => goToLocal(localIndex + 1)}
+          disabled={localIndex >= cellHistory.length - 1}
           aria-label="Next version"
         >
           →
@@ -230,13 +245,14 @@ function HistoryPanel({ api }: SidePanelProps) {
 
 function PlotPanel({ api }: SidePanelProps) {
   const { state } = api
+  const cellPlots = state.plots.filter((item) => item.cellId === state.activeCellId)
   const plot =
-    state.plots.find((item) => item.id === state.activePlotId) ??
-    state.plots[state.plots.length - 1]
+    cellPlots.find((item) => item.id === state.activePlotId) ??
+    cellPlots[cellPlots.length - 1]
 
   if (!plot) {
     return (
-      <EmptyState text="No plots yet. Call cello.plot({ labels, values }) — this panel opens automatically." />
+      <EmptyState text="No plot for this cell. Call cello.plot({ labels, values }) — this panel opens automatically." />
     )
   }
 
@@ -247,16 +263,18 @@ function PlotPanel({ api }: SidePanelProps) {
         <span className="muted">{plot.kind}</span>
       </div>
       {plot.kind === 'line' ? <LineChart plot={plot} /> : <BarChart plot={plot} />}
-      <ul className="plot-list">
-        {state.plots
-          .slice()
-          .reverse()
-          .map((item) => (
-            <li key={item.id} className={item.id === plot.id ? 'is-active' : ''}>
-              {item.title}
-            </li>
-          ))}
-      </ul>
+      {cellPlots.length > 1 ? (
+        <ul className="plot-list">
+          {cellPlots
+            .slice()
+            .reverse()
+            .map((item) => (
+              <li key={item.id} className={item.id === plot.id ? 'is-active' : ''}>
+                {item.title}
+              </li>
+            ))}
+        </ul>
+      ) : null}
     </div>
   )
 }
@@ -402,12 +420,13 @@ function EnvPanel({ api }: SidePanelProps) {
 
 function DataPanel({ api }: SidePanelProps) {
   const { state } = api
+  const cellTables = state.tables.filter((item) => item.cellId === state.activeCellId)
   const table =
-    state.tables.find((item) => item.id === state.activeTableId) ??
-    state.tables[state.tables.length - 1]
+    cellTables.find((item) => item.id === state.activeTableId) ??
+    cellTables[cellTables.length - 1]
 
   if (!table) {
-    return <EmptyState text="No tables yet. Use cello.table(rows, 'name')." />
+    return <EmptyState text="No table for this cell. Use cello.table(rows, 'name')." />
   }
 
   return (
@@ -525,9 +544,10 @@ function AiPanel({ api }: SidePanelProps) {
   )
 }
 
-function ConsolePanel({ lines }: { lines: string[] }) {
+function ConsolePanel({ api }: SidePanelProps) {
+  const lines = api.activeCell.consoleLines ?? []
   if (lines.length === 0) {
-    return <EmptyState text="Console is empty. Run a cell to capture kernel output." />
+    return <EmptyState text="No console output for this cell. Run it to capture kernel output." />
   }
   return (
     <div className="console-panel">
