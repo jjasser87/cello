@@ -23,7 +23,7 @@ export default function App() {
         return
       }
       event.preventDefault()
-      runCell()
+      void runCell()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -39,10 +39,23 @@ export default function App() {
         <div className="workspace-cluster">
           <div className="main-actions" role="toolbar" aria-label="Workspace and cell actions">
             <div className="action-group">
-              <button type="button" onClick={api.runAll} title="Run all cells in order">
+              <label className="language-picker" title="Cell language / kernel">
+                <span className="language-picker-label">Lang</span>
+                <select
+                  value={state.language}
+                  onChange={(event) =>
+                    api.setLanguage(event.target.value === 'javascript' ? 'javascript' : 'r')
+                  }
+                  aria-label="Kernel language"
+                >
+                  <option value="r">R</option>
+                  <option value="javascript">JS</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => void api.runAll()} title="Run all cells in order">
                 Run all
               </button>
-              <button type="button" onClick={api.resetKernel}>
+              <button type="button" onClick={() => void api.resetKernel()}>
                 Reset
               </button>
               <button
@@ -90,7 +103,7 @@ export default function App() {
               <button
                 type="button"
                 className="primary"
-                onClick={() => api.runCell(activeCell.id)}
+                onClick={() => void api.runCell(activeCell.id)}
                 title="Run cell (⌘/Ctrl+Enter)"
               >
                 Run
@@ -101,9 +114,17 @@ export default function App() {
           <CellEditor
             cell={activeCell}
             index={index}
+            language={state.language}
+            kernelHint={
+              state.language === 'r'
+                ? state.kernelStatus.available
+                  ? `R ${state.kernelStatus.version ?? ''}`.trim()
+                  : state.kernelStatus.message ?? 'R unavailable'
+                : 'in-browser JS'
+            }
             onChange={api.updateActiveCode}
             onRename={(name) => api.renameCell(activeCell.id, name)}
-            onRun={() => api.runCell(activeCell.id)}
+            onRun={() => void api.runCell(activeCell.id)}
             sidePanel={<SidePanel api={api} />}
           />
         </div>
