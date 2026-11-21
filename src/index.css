@@ -1242,10 +1242,159 @@ code,
   color: var(--ink);
 }
 
+.file-project-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.file-project-name {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0;
+  cursor: text;
+  text-align: left;
+}
+
+.file-project-name:hover {
+  color: var(--wood-bright);
+}
+
+.file-project-name-input,
+.file-rename-input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #050505;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding: 0.15rem 0.35rem;
+}
+
+.file-project-name-input:focus,
+.file-rename-input:focus {
+  outline: 1px solid rgba(196, 138, 58, 0.45);
+  border-color: rgba(196, 138, 58, 0.35);
+}
+
+.file-ext-badge {
+  letter-spacing: 0.02em;
+}
+
+.file-script-line {
+  margin: 0;
+}
+
+.file-node {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
 .file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0;
+  min-width: 0;
+}
+
+.file-twist {
+  flex: 0 0 1.1rem;
+  width: 1.1rem;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0;
+  font-size: 0.75rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.file-twist.is-leaf {
+  cursor: default;
+  text-align: center;
+}
+
+.file-label {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-align: left;
+  padding: 0.1rem 0.25rem;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.file-label.is-root {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.file-label.is-active,
+.file-node.is-active > .file-row .file-label {
+  color: var(--wood-bright);
+  background: var(--wood-soft);
+}
+
+.file-label:hover {
+  color: var(--ink);
+}
+
+.file-ops {
   display: inline-flex;
+  gap: 0.1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.file-row:hover .file-ops,
+.file-row:focus-within .file-ops {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.file-ops button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1;
+  padding: 0.15rem 0.28rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.file-ops button:hover {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.file-add-row {
+  display: flex;
+  align-items: center;
   gap: 0.35rem;
-  padding: 0.15rem 0;
+  padding: 0.1rem 0 0.25rem;
+}
+
+.file-children {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
 }
 
 .file-tree ul {

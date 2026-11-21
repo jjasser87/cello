@@ -12,9 +12,10 @@
     "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
     "test:flow-graph": "node --experimental-strip-types --test src/lib/flowGraph.test.ts",
     "test:explanation": "node --experimental-strip-types --test src/lib/explanation.test.ts",
+    "test:project-file": "node --experimental-strip-types --test src/lib/projectFile.test.ts",
     "test:r-completions": "node --experimental-strip-types --test src/lib/rCompletions.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:r-completions"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions"
   },
   "dependencies": {
     "react": "^19.3.1",

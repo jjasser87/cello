@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { CellEditor } from './components/CellEditor'
 import { CommandPalette, type CommandId } from './components/CommandPalette'
 import { SidePanel } from './components/panels/SidePanel'
 import { useWorkspace } from './hooks/useWorkspace'
+import { exportProjectJson } from './lib/storage'
+import { projectFileName } from './lib/projectFile'
 import type { PanelId } from './types'
 
 export default function App() {
@@ -12,6 +14,7 @@ export default function App() {
   const index = Math.max(0, activeIndex)
   const total = state.cells.length
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const openProjectInputRef = useRef<HTMLInputElement>(null)
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
 
@@ -24,6 +27,40 @@ export default function App() {
     if (index >= total - 1) return
     api.selectCell(state.cells[index + 1].id)
   }, [api, index, total, state.cells])
+
+  const saveProject = useCallback(() => {
+    const json = exportProjectJson(state)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = projectFileName(state.meta.name)
+    anchor.click()
+    URL.revokeObjectURL(url)
+  }, [state])
+
+  const pickOpenProject = useCallback(() => {
+    openProjectInputRef.current?.click()
+  }, [])
+
+  const onOpenProjectFile = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0]
+      event.target.value = ''
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const text = typeof reader.result === 'string' ? reader.result : ''
+        const result = api.openProjectJson(text)
+        if (!result.ok) {
+          console.warn('Cello open project failed:', result.error)
+          window.alert(`Could not open project: ${result.error}`)
+        }
+      }
+      reader.readAsText(file)
+    },
+    [api],
+  )
 
   const runPaletteCommand = useCallback(
     (id: CommandId) => {
@@ -68,8 +105,31 @@ export default function App() {
         setPaletteOpen(false)
         return
       }
+      if (id === 'new-project') {
+        api.newProject()
+        setPaletteOpen(false)
+        return
+      }
+      if (id === 'save-project') {
+        setPaletteOpen(false)
+        saveProject()
+        return
+      }
+      if (id === 'open-project') {
+        setPaletteOpen(false)
+        pickOpenProject()
+        return
+      }
     },
-    [api, activeCell.id, state.language, goPrevCell, goNextCell],
+    [
+      api,
+      activeCell.id,
+      state.language,
+      goPrevCell,
+      goNextCell,
+      saveProject,
+      pickOpenProject,
+    ],
   )
 
   useEffect(() => {
@@ -124,6 +184,15 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <input
+        ref={openProjectInputRef}
+        type="file"
+        accept=".cello,application/json"
+        className="visually-hidden"
+        aria-hidden
+        tabIndex={-1}
+        onChange={onOpenProjectFile}
+      />
       <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
         <div className="workspace-cluster">
           <CellEditor

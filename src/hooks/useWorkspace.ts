@@ -10,90 +10,71 @@ import { loadSettings, saveSettings } from '../lib/settings'
 import { createSharedBag, runCellCode, type RunArtifacts } from '../lib/runtime'
 import { createComment, emptyExplanationTemplate } from '../lib/explanation'
 import {
+  addFileChild,
+  defaultProjectFiles,
+  defaultProjectName,
+  deleteFileNode,
+  hydratePersistedCell,
+  parseProject,
+  pathFromRoot,
+  renameFileNode,
+  type CelloProjectV1,
+} from '../lib/projectFile'
+import {
   createId,
   cellsToScript,
   defaultScriptPath,
   scriptToCells,
   starterScript,
 } from '../lib/script'
-import { hydratePersistedCell, loadWorkspace, saveWorkspace } from '../lib/storage'
+import { loadWorkspace, saveWorkspace } from '../lib/storage'
 import type {
   Cell,
   HistoryEntry,
   KernelLanguage,
   PanelId,
-  ProjectFile,
   WorkspaceState,
 } from '../types'
 
-const PANEL_IDS: PanelId[] = [
-  'cells',
-  'explain',
-  'history',
-  'plot',
-  'files',
-  'env',
-  'data',
-  'structure',
-  'ai',
-  'console',
-]
-
-const DEFAULT_FILES: ProjectFile[] = [
-  {
-    id: 'folder_root',
-    name: 'project',
-    kind: 'folder',
-    children: [
-      { id: 'file_analysis_r', name: 'analysis.R', kind: 'file' },
-      { id: 'file_analysis_js', name: 'analysis.js', kind: 'file' },
-      { id: 'file_readme', name: 'README.md', kind: 'file' },
-      {
-        id: 'folder_data',
-        name: 'data',
-        kind: 'folder',
-        children: [
-          { id: 'file_sales', name: 'sales.csv', kind: 'file' },
-          { id: 'file_notes', name: 'notes.txt', kind: 'file' },
-        ],
-      },
-    ],
-  },
-]
-
-function detectLanguage(saved?: {
-  language?: KernelLanguage
-  scriptPath?: string
-  cells?: { code: string }[]
-}): KernelLanguage {
-  if (saved?.language === 'r' || saved?.language === 'javascript') return saved.language
-  if (saved?.scriptPath?.toLowerCase().endsWith('.r')) return 'r'
-  if (saved?.scriptPath?.toLowerCase().endsWith('.js')) return 'javascript'
-  const sample = saved?.cells?.map((cell) => cell.code).join('\n') ?? ''
-  if (/<-/.test(sample) || /\bdata\.frame\s*\(/.test(sample)) return 'r'
-  // Existing localStorage workspaces without a language field were JS.
-  if (saved?.cells?.length) return 'javascript'
-  return 'r'
-}
-
-function buildInitial(): WorkspaceState {
-  const saved = loadWorkspace()
-  const language = detectLanguage(saved ?? undefined)
-  const cells =
-    saved?.cells?.length
-      ? saved.cells.map((cell) => hydratePersistedCell(cell))
-      : scriptToCells(starterScript(language))
-
-  const savedPanel = saved?.activePanel
-  const activePanel: PanelId =
-    savedPanel && PANEL_IDS.includes(savedPanel) ? savedPanel : 'cells'
-
+function buildFromProject(
+  project: CelloProjectV1,
+  extras?: Partial<Pick<WorkspaceState, 'kernelStatus' | 'consoleLines' | 'sidePanelOpen'>>,
+): WorkspaceState {
+  const cells = project.cells.map((cell) => hydratePersistedCell(cell))
   return {
     cells,
-    activeCellId: saved?.activeCellId && cells.some((c) => c.id === saved.activeCellId)
-      ? saved.activeCellId
+    activeCellId: cells.some((c) => c.id === project.activeCellId)
+      ? project.activeCellId
       : cells[0].id,
-    activePanel,
+    activePanel: project.activePanel,
+    sidePanelOpen: extras?.sidePanelOpen ?? false,
+    language: project.language,
+    kernelStatus: extras?.kernelStatus ?? {
+      available: false,
+      version: null,
+      message: 'Checking R kernel…',
+    },
+    history: [],
+    historyIndex: -1,
+    plots: [],
+    activePlotId: null,
+    tables: [],
+    activeTableId: null,
+    env: [],
+    consoleLines: extras?.consoleLines ?? ['Ready. Run a cell with ⌘/Ctrl+Enter.'],
+    files: project.files,
+    meta: project.meta,
+    scriptPath: project.scriptPath,
+  }
+}
+
+function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName()): WorkspaceState {
+  const cells = scriptToCells(starterScript(language))
+  const now = Date.now()
+  return {
+    cells,
+    activeCellId: cells[0].id,
+    activePanel: 'cells',
     sidePanelOpen: false,
     language,
     kernelStatus: {
@@ -111,9 +92,16 @@ function buildInitial(): WorkspaceState {
     activeTableId: null,
     env: [],
     consoleLines: ['Ready. Run a cell with ⌘/Ctrl+Enter.'],
-    files: DEFAULT_FILES,
-    scriptPath: saved?.scriptPath ?? defaultScriptPath(language),
+    files: defaultProjectFiles(name, language),
+    meta: { name, createdAt: now, updatedAt: now },
+    scriptPath: defaultScriptPath(language),
   }
+}
+
+function buildInitial(): WorkspaceState {
+  const saved = loadWorkspace()
+  if (saved) return buildFromProject(saved)
+  return buildFresh('r')
 }
 
 function applyRunToState(
@@ -224,6 +212,7 @@ export function useWorkspace() {
       env: [] as WorkspaceState['env'],
       consoleLines: [] as string[],
       files: state.files,
+      meta: state.meta,
     }),
     [
       state.cells,
@@ -233,6 +222,7 @@ export function useWorkspace() {
       state.kernelStatus,
       state.scriptPath,
       state.files,
+      state.meta,
     ],
   )
 
@@ -440,12 +430,13 @@ export function useWorkspace() {
       if (prev.language === language) return prev
       sharedRef.current = createSharedBag()
       const cells = scriptToCells(starterScript(language))
+      const scriptPath = defaultScriptPath(language)
       return {
         ...prev,
         language,
         cells,
         activeCellId: cells[0].id,
-        scriptPath: defaultScriptPath(language),
+        scriptPath,
         history: [],
         historyIndex: -1,
         plots: [],
@@ -468,6 +459,122 @@ export function useWorkspace() {
         /* status banner already covers unavailability */
       })
     }
+  }, [])
+
+  const newProject = useCallback((language?: KernelLanguage) => {
+    sharedRef.current = createSharedBag()
+    const lang = language ?? stateRef.current.language
+    setState((prev) => {
+      // Distinct name so the Files panel clearly shows a fresh project.
+      const fresh = buildFresh(lang, 'untitled')
+      return {
+        ...fresh,
+        kernelStatus: prev.kernelStatus,
+        consoleLines: [
+          `New project “${fresh.meta.name}” (${lang === 'r' ? 'R' : 'JS'}).`,
+        ],
+        activePanel: 'files',
+        sidePanelOpen: true,
+      }
+    })
+    if (lang === 'r') {
+      void resetRKernel().catch(() => {
+        /* status banner already covers unavailability */
+      })
+    }
+  }, [])
+
+  const openProjectJson = useCallback((raw: string): { ok: true } | { ok: false; error: string } => {
+    const parsed = parseProject(raw)
+    if (!parsed.ok) return parsed
+    sharedRef.current = createSharedBag()
+    setState((prev) => {
+      const next = buildFromProject(parsed.project, {
+        kernelStatus: prev.kernelStatus,
+        consoleLines: [
+          `Opened project “${parsed.project.meta.name}” (${parsed.project.cells.length} cells).`,
+        ],
+        sidePanelOpen: true,
+      })
+      return { ...next, activePanel: 'files', sidePanelOpen: true }
+    })
+    if (parsed.project.language === 'r') {
+      void resetRKernel().catch(() => {
+        /* ignore */
+      })
+    }
+    return { ok: true }
+  }, [])
+
+  const renameProject = useCallback((name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setState((prev) => {
+      const files =
+        prev.files[0]?.kind === 'folder'
+          ? [{ ...prev.files[0], name: trimmed }, ...prev.files.slice(1)]
+          : prev.files
+      return {
+        ...prev,
+        files,
+        meta: { ...prev.meta, name: trimmed, updatedAt: Date.now() },
+      }
+    })
+  }, [])
+
+  const renameProjectFile = useCallback((id: string, name: string) => {
+    setState((prev) => {
+      const files = renameFileNode(prev.files, id, name)
+      const root = files[0]
+      const meta =
+        root?.kind === 'folder' && root.id === id
+          ? { ...prev.meta, name: root.name, updatedAt: Date.now() }
+          : { ...prev.meta, updatedAt: Date.now() }
+      // Keep scriptPath in sync when the active file is renamed.
+      const path = pathFromRoot(files, id)
+      let scriptPath = prev.scriptPath
+      if (path && prev.scriptPath) {
+        const oldPath = pathFromRoot(prev.files, id)
+        if (oldPath && oldPath === prev.scriptPath) scriptPath = path
+      }
+      return { ...prev, files, meta, scriptPath }
+    })
+  }, [])
+
+  const addProjectFile = useCallback(
+    (parentId: string, kind: 'file' | 'folder', name: string) => {
+      setState((prev) => ({
+        ...prev,
+        files: addFileChild(prev.files, parentId, kind, name),
+        meta: { ...prev.meta, updatedAt: Date.now() },
+      }))
+    },
+    [],
+  )
+
+  const deleteProjectFile = useCallback((id: string) => {
+    setState((prev) => {
+      // Never delete the project root.
+      if (prev.files[0]?.id === id) return prev
+      return {
+        ...prev,
+        files: deleteFileNode(prev.files, id),
+        meta: { ...prev.meta, updatedAt: Date.now() },
+      }
+    })
+  }, [])
+
+  const selectProjectFile = useCallback((id: string) => {
+    setState((prev) => {
+      const path = pathFromRoot(prev.files, id)
+      if (path === null || path === '') return prev
+      return {
+        ...prev,
+        scriptPath: path,
+        activePanel: 'files',
+        sidePanelOpen: true,
+      }
+    })
   }, [])
 
   const runCell = useCallback(async (cellId?: string) => {
@@ -904,6 +1011,7 @@ export function useWorkspace() {
       ],
       activePanel: 'cells',
       sidePanelOpen: false,
+      meta: { ...prev.meta, updatedAt: Date.now() },
     }))
   }, [])
 
@@ -963,6 +1071,13 @@ export function useWorkspace() {
     moveCell,
     setLanguage,
     setRscriptPath,
+    newProject,
+    openProjectJson,
+    renameProject,
+    renameProjectFile,
+    addProjectFile,
+    deleteProjectFile,
+    selectProjectFile,
     runCell,
     runAll,
     resetKernel,

@@ -19,7 +19,8 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - Plot + data panels auto-expand when a cell produces them
 - Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, Explain cell, run, language, prefs stub)
 - Compact cell nav under the editor: prev/next + Alt+↑/↓ (palette Navigate commands too)
-- Local persistence of the working script (code + explanations + comments in `localStorage`)
+- **Files** ribbon panel — project file tree (not a separate “project cell”); New / Save / Open project from the command palette
+- Durable **`.cello`** project file (JSON) for cells, explanations, comments, file tree, and UI selection; autosave uses the same schema in `localStorage`
 
 ## Develop (with R)
 
@@ -83,11 +84,24 @@ Cell source is normalized (CRLF → LF, strip BOM) before R `parse()`, so Window
 
 ## Explanations & persistence
 
-Each code cell carries a Markdown **explanation** (seeded with focus-audit headings when empty) and a list of **comments** (`id`, `body`, `createdAt`, `author`). Both persist in `localStorage` under `cello.workspace.v0` on each cell object.
+Each code cell carries a Markdown **explanation** (seeded with focus-audit headings when empty) and a list of **comments** (`id`, `body`, `createdAt`, `author`).
 
-Plain-text script export (`⇩`) remains code-only with `# %%` / `// %%` markers — explanations are **not** embedded in `.R` / `.js` files. Restoring from a full workspace payload keeps docs and comments; importing a bare script reseeds empty explanation templates.
+### `.cello` project file
 
-Open **Explain** from the ribbon (`Ex`), the ¶ toolbar icon, or the command palette (“Explain cell” / “Go to Explain”).
+Durable save format: a JSON document with `"format": "cello-project"` / `"version": 1`. It stores:
+
+- `meta` (project name + timestamps)
+- `language`, `scriptPath`, `activeCellId`, `activePanel`
+- `cells[]` (code + explanation + comments)
+- `files[]` (project tree shown in the Files ribbon)
+
+Autosave writes the same payload to `localStorage` (`cello.workspace.v1`; v0 payloads migrate on load). Runtime plots / tables / env / history are not persisted — they rebuild on run. Flow graphs are derived from cells (no separate Mermaid blob).
+
+Command palette (`⌘/Ctrl+Shift+P`): **New project**, **Save project…** (downloads `name.cello`), **Open project…**.
+
+Plain-text script export (`⇩`) remains code-only with `# %%` / `// %%` markers — explanations are **not** embedded in `.R` / `.js` files.
+
+Open **Explain** from the ribbon (`Ex`), the ¶ toolbar icon, or the command palette (“Explain cell” / “Go to Explain”). Open **Files** from the ribbon (`Fi`) or palette (“Go to Files”).
 
 
 ## Architecture (short)
