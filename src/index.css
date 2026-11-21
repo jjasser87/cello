@@ -387,14 +387,92 @@ code,
   border-color: rgba(196, 138, 58, 0.35);
 }
 
-.editor-footnote {
+/* Compact cell nav ribbon — replaces the long footer hint. */
+.cell-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
   margin: 0;
   box-sizing: border-box;
   width: var(--cell-frame-width);
   max-width: 100%;
+  min-height: 1.6rem;
   color: var(--muted);
   font-family: var(--font-ui);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+}
+
+.cell-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.cell-nav-btn:hover:not(:disabled) {
+  color: var(--wood-bright);
+  border-color: rgba(196, 138, 58, 0.35);
+  background: var(--wood-soft);
+}
+
+.cell-nav-pos {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  min-width: 2.6rem;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+.cell-nav-sep {
+  margin: 0 0.12rem;
+  color: var(--muted);
+}
+
+.cell-nav-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  margin-left: 0.35rem;
+  color: var(--muted);
+}
+
+.cell-nav-hint kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-elevated);
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  line-height: 1;
+}
+
+.cell-nav-dot {
+  margin: 0 0.1rem;
+  opacity: 0.7;
+}
+
+.cell-nav-kernel {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cell-editor > .cell-error {
@@ -1072,10 +1150,14 @@ code,
   }
 
   .cell-header,
-  .editor-footnote,
+  .cell-nav,
   .cell-editor > .cell-error {
     min-width: 0;
     width: 100%;
+  }
+
+  .cell-nav-hint {
+    display: none;
   }
 
   .cell-header {

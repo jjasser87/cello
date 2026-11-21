@@ -17,6 +17,7 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - Native R graphics capture: base `plot()` / printed `ggplot()` appear in Plot (PNG via the R worker)
 - Plot + data panels auto-expand when a cell produces them
 - Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, run, language, prefs stub)
+- Compact cell nav under the editor: prev/next + Alt+↑/↓ (palette Navigate commands too)
 - Local persistence of the working script
 
 ## Develop (with R)

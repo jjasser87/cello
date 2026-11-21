@@ -15,11 +15,31 @@ export default function App() {
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
 
+  const goPrevCell = useCallback(() => {
+    if (index <= 0) return
+    api.selectCell(state.cells[index - 1].id)
+  }, [api, index, state.cells])
+
+  const goNextCell = useCallback(() => {
+    if (index >= total - 1) return
+    api.selectCell(state.cells[index + 1].id)
+  }, [api, index, total, state.cells])
+
   const runPaletteCommand = useCallback(
     (id: CommandId) => {
       if (id.startsWith('panel:')) {
         const panel = id.slice('panel:'.length) as PanelId
         api.setPanel(panel)
+        setPaletteOpen(false)
+        return
+      }
+      if (id === 'prev-cell') {
+        goPrevCell()
+        setPaletteOpen(false)
+        return
+      }
+      if (id === 'next-cell') {
+        goNextCell()
         setPaletteOpen(false)
         return
       }
@@ -44,7 +64,7 @@ export default function App() {
         return
       }
     },
-    [api, activeCell.id, state.language],
+    [api, activeCell.id, state.language, goPrevCell, goNextCell],
   )
 
   useEffect(() => {
@@ -54,6 +74,20 @@ export default function App() {
         event.preventDefault()
         setPaletteOpen((open) => !open)
         return
+      }
+
+      // Alt+↑ / Alt+↓ — jump cells (also handled inside the textarea).
+      if (event.altKey && !mod && !paletteOpen) {
+        if (event.key === 'ArrowUp') {
+          event.preventDefault()
+          goPrevCell()
+          return
+        }
+        if (event.key === 'ArrowDown') {
+          event.preventDefault()
+          goNextCell()
+          return
+        }
       }
 
       if (!(mod) || event.key !== 'Enter') return
@@ -71,7 +105,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [runCell])
+  }, [runCell, goPrevCell, goNextCell, paletteOpen])
 
   const exportScript = () => {
     const blob = new Blob([api.exportScript()], { type: 'text/plain' })
@@ -90,17 +124,25 @@ export default function App() {
           <CellEditor
             cell={activeCell}
             index={index}
+            total={total}
             language={state.language}
             kernelHint={
               state.language === 'r'
                 ? state.kernelStatus.available
                   ? `R ${state.kernelStatus.version ?? ''}`.trim()
-                  : state.kernelStatus.message ?? 'R unavailable'
-                : 'in-browser JS'
+                  : 'R unavailable'
+                : 'JS'
+            }
+            kernelDetail={
+              state.language === 'r' && !state.kernelStatus.available
+                ? (state.kernelStatus.message ?? undefined)
+                : undefined
             }
             onChange={api.updateActiveCode}
             onRename={(name) => api.renameCell(activeCell.id, name)}
             onRun={() => void api.runCell(activeCell.id)}
+            onPrevCell={goPrevCell}
+            onNextCell={goNextCell}
             toolbar={
               <div className="cell-toolbar" role="toolbar" aria-label="Cell actions">
                 <label className="tool-lang" title="Cell language / kernel">

@@ -3,6 +3,8 @@ import type { PanelId } from '../types'
 
 export type CommandId =
   | `panel:${PanelId}`
+  | 'prev-cell'
+  | 'next-cell'
   | 'run'
   | 'run-all'
   | 'reset'
@@ -13,7 +15,7 @@ export interface CommandItem {
   id: CommandId
   label: string
   hint?: string
-  group: 'Panels' | 'Kernel' | 'Settings'
+  group: 'Navigate' | 'Panels' | 'Kernel' | 'Settings'
 }
 
 const PANEL_COMMANDS: { id: PanelId; label: string }[] = [
@@ -37,6 +39,18 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
   }))
 
   return [
+    {
+      id: 'prev-cell',
+      label: 'Previous cell',
+      hint: 'Alt+↑',
+      group: 'Navigate',
+    },
+    {
+      id: 'next-cell',
+      label: 'Next cell',
+      hint: 'Alt+↓',
+      group: 'Navigate',
+    },
     ...panels,
     {
       id: 'run',
@@ -114,7 +128,7 @@ export function CommandPalette({ language, onClose, onRun }: CommandPaletteProps
     onRun(item.id)
   }
 
-  const groups = (['Panels', 'Kernel', 'Settings'] as const)
+  const groups = (['Navigate', 'Panels', 'Kernel', 'Settings'] as const)
     .map((group) => ({
       group,
       items: filtered
