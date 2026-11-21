@@ -1,0 +1,71 @@
+name: Windows desktop installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'electron/**'
+      - 'electron-builder.yml'
+      - 'scripts/bundle-electron-main.mjs'
+      - 'scripts/ensure-electron.mjs'
+      - 'server/**'
+      - 'kernel/r/worker.R'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/windows-desktop.yml'
+  pull_request:
+    paths:
+      - 'electron/**'
+      - 'electron-builder.yml'
+      - 'scripts/bundle-electron-main.mjs'
+      - 'scripts/ensure-electron.mjs'
+      - 'server/**'
+      - 'kernel/r/worker.R'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/windows-desktop.yml'
+
+concurrency:
+  group: windows-desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        # allowScripts in package.json must run so Electron's binary lands.
+        run: npm ci
+
+      - name: Ensure Electron binary
+        run: npm run desktop:install
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build Windows installer (NSIS + portable)
+        run: npm run desktop:dist:win
+        env:
+          # CI artifacts are unsigned; skip local code-signing prompts.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cello-windows-installer
+          path: |
+            release/Cello-Setup-*.exe
+            release/Cello-Portable-*.exe
+          if-no-files-found: error
+          retention-days: 14

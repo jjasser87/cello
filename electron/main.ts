@@ -13,8 +13,31 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createKernelSession } from '../server/rKernelHost.ts'
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const DIST = path.join(ROOT, 'dist')
+const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+/** Repo root in dev; `app.getAppPath()` when packaged (asar / resources/app). */
+function appRoot(): string {
+  return app.isPackaged ? app.getAppPath() : MODULE_ROOT
+}
+
+/** Vite UI build — inside the app package (asar-safe; Node streams it). */
+function distDir(): string {
+  return path.join(appRoot(), 'dist')
+}
+
+/**
+ * Packaged installs keep `worker.R` in `resources/kernel/r` (outside asar so
+ * Rscript can read it) and install R packages under userData (Program Files
+ * is not writable).
+ */
+function kernelSessionOptions() {
+  if (!app.isPackaged) return {}
+  return {
+    root: appRoot(),
+    workerPath: path.join(process.resourcesPath, 'kernel', 'r', 'worker.R'),
+    libDir: path.join(app.getPath('userData'), 'r-lib'),
+  }
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -49,12 +72,13 @@ function sendText(res: ServerResponse, status: number, body: string, type: strin
 }
 
 async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const dist = distDir()
   const rawUrl = req.url?.split('?')[0] ?? '/'
   let rel = decodeURIComponent(rawUrl)
   if (rel === '/') rel = '/index.html'
   // Prevent path traversal outside dist.
-  const filePath = path.normalize(path.join(DIST, rel))
-  if (!filePath.startsWith(DIST)) {
+  const filePath = path.normalize(path.join(dist, rel))
+  if (!filePath.startsWith(dist)) {
     sendText(res, 403, 'Forbidden', 'text/plain; charset=utf-8')
     return
   }
@@ -62,7 +86,7 @@ async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<voi
   let target = filePath
   if (!(await pathExists(target))) {
     // SPA-style fallback for client routes (none today, but harmless).
-    target = path.join(DIST, 'index.html')
+    target = path.join(dist, 'index.html')
     if (!(await pathExists(target))) {
       sendText(
         res,
@@ -91,13 +115,13 @@ async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<voi
 }
 
 async function startHost(): Promise<{ url: string; close: () => Promise<void> }> {
-  if (!(await pathExists(path.join(DIST, 'index.html')))) {
+  if (!(await pathExists(path.join(distDir(), 'index.html')))) {
     throw new Error(
       'Missing dist/index.html. Run `npm run build` (or use `npm run desktop`, which builds first).',
     )
   }
 
-  const session = createKernelSession()
+  const session = createKernelSession(kernelSessionOptions())
   void session.ensureStarted().catch(() => {
     /* status endpoint surfaces the reason */
   })

@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Electron packaged builds
+release/
+electron/main-bundle.mjs
+electron/main-bundle.mjs.map
+
 # Local R package library created by the kernel host
 kernel/r/.lib/
 
