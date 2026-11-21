@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  configureKernelRscript,
   evalOnRKernel,
   fetchKernelStatus,
   resetRKernel,
   runAllOnRKernel,
 } from '../lib/kernelClient'
+import { loadSettings, saveSettings } from '../lib/settings'
 import { createSharedBag, runCellCode, type RunArtifacts } from '../lib/runtime'
 import { createComment, emptyExplanationTemplate } from '../lib/explanation'
 import {
@@ -98,6 +100,8 @@ function buildInitial(): WorkspaceState {
       available: false,
       version: null,
       message: 'Checking R kernel…',
+      rscriptPath: null,
+      rscriptOverride: loadSettings().rscriptPath,
     },
     history: [],
     historyIndex: -1,
@@ -247,7 +251,16 @@ export function useWorkspace() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
-      const status = await fetchKernelStatus()
+      const savedPath = loadSettings().rscriptPath
+      let status =
+        savedPath != null
+          ? await configureKernelRscript(savedPath).catch(async () => fetchKernelStatus())
+          : await fetchKernelStatus()
+      if (cancelled) return
+      // If configure soft-failed at the network layer, still refresh status.
+      if (savedPath != null && status.rscriptOverride === undefined) {
+        status = await fetchKernelStatus()
+      }
       if (cancelled) return
       setState((prev) => ({
         ...prev,
@@ -255,11 +268,15 @@ export function useWorkspace() {
           available: status.available,
           version: status.version,
           message: status.message ?? status.error ?? null,
+          rscriptPath: status.rscriptPath ?? null,
+          rscriptOverride: status.rscriptOverride ?? savedPath,
         },
         consoleLines: [
           ...prev.consoleLines,
           status.available
-            ? `R kernel ready${status.version ? ` (R ${status.version})` : ''}.`
+            ? `R kernel ready${status.version ? ` (R ${status.version})` : ''}${
+                status.rscriptPath ? ` · ${status.rscriptPath}` : ''
+              }.`
             : `R kernel unavailable — ${status.message ?? status.error ?? 'unknown reason'}. JS kernel remains available.`,
         ].slice(-200),
       }))
@@ -890,6 +907,45 @@ export function useWorkspace() {
     }))
   }, [])
 
+  const setRscriptPath = useCallback(async (rscriptPath: string | null) => {
+    const saved = saveSettings({ rscriptPath })
+    try {
+      const status = await configureKernelRscript(saved.rscriptPath)
+      setState((prev) => ({
+        ...prev,
+        kernelStatus: {
+          available: status.available,
+          version: status.version,
+          message: status.message ?? status.error ?? null,
+          rscriptPath: status.rscriptPath ?? null,
+          rscriptOverride: status.rscriptOverride ?? saved.rscriptPath,
+        },
+        consoleLines: [
+          ...prev.consoleLines,
+          saved.rscriptPath
+            ? status.available
+              ? `R path set to ${status.rscriptPath ?? saved.rscriptPath}.`
+              : `R path set to ${saved.rscriptPath}, but kernel failed: ${status.message ?? status.error ?? 'unknown'}.`
+            : status.available
+              ? `R path cleared — using ${status.rscriptPath ?? 'auto-discovery'}.`
+              : `R path cleared — ${status.message ?? status.error ?? 'R still unavailable'}.`,
+        ].slice(-200),
+      }))
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      setState((prev) => ({
+        ...prev,
+        kernelStatus: {
+          ...prev.kernelStatus,
+          available: false,
+          message,
+          rscriptOverride: saved.rscriptPath,
+        },
+        consoleLines: [...prev.consoleLines, `Could not apply R path: ${message}`].slice(-200),
+      }))
+    }
+  }, [])
+
   return {
     state,
     activeCell,
@@ -906,6 +962,7 @@ export function useWorkspace() {
     deleteCell,
     moveCell,
     setLanguage,
+    setRscriptPath,
     runCell,
     runAll,
     resetKernel,

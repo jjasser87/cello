@@ -85,7 +85,7 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
     {
       id: 'settings',
       label: 'Settings…',
-      hint: 'Prefs stub',
+      hint: 'R path · prefs',
       group: 'Settings',
     },
   ]
@@ -93,11 +93,25 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
 
 interface CommandPaletteProps {
   language: 'r' | 'javascript'
+  rscriptPath: string | null
+  rscriptResolved: string | null
+  kernelAvailable: boolean
+  kernelMessage: string | null
   onClose: () => void
   onRun: (id: CommandId) => void
+  onSetRscriptPath: (path: string | null) => void | Promise<void>
 }
 
-export function CommandPalette({ language, onClose, onRun }: CommandPaletteProps) {
+export function CommandPalette({
+  language,
+  rscriptPath,
+  rscriptResolved,
+  kernelAvailable,
+  kernelMessage,
+  onClose,
+  onRun,
+  onSetRscriptPath,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const [view, setView] = useState<'commands' | 'settings'>('commands')
@@ -242,11 +256,16 @@ export function CommandPalette({ language, onClose, onRun }: CommandPaletteProps
             </p>
           </>
         ) : (
-          <SettingsStub
+          <SettingsPanel
             language={language}
+            rscriptPath={rscriptPath}
+            rscriptResolved={rscriptResolved}
+            kernelAvailable={kernelAvailable}
+            kernelMessage={kernelMessage}
             onBack={() => setView('commands')}
             onClose={onClose}
             onToggleLanguage={() => onRun('toggle-language')}
+            onSetRscriptPath={onSetRscriptPath}
           />
         )}
       </div>
@@ -254,17 +273,43 @@ export function CommandPalette({ language, onClose, onRun }: CommandPaletteProps
   )
 }
 
-function SettingsStub({
+function SettingsPanel({
   language,
+  rscriptPath,
+  rscriptResolved,
+  kernelAvailable,
+  kernelMessage,
   onBack,
   onClose,
   onToggleLanguage,
+  onSetRscriptPath,
 }: {
   language: 'r' | 'javascript'
+  rscriptPath: string | null
+  rscriptResolved: string | null
+  kernelAvailable: boolean
+  kernelMessage: string | null
   onBack: () => void
   onClose: () => void
   onToggleLanguage: () => void
+  onSetRscriptPath: (path: string | null) => void | Promise<void>
 }) {
+  const [draft, setDraft] = useState(rscriptPath ?? '')
+  const [busy, setBusy] = useState(false)
+
+  const apply = async (next: string | null) => {
+    setBusy(true)
+    try {
+      await onSetRscriptPath(next)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const statusText = kernelAvailable
+    ? `Using ${rscriptResolved ?? 'Rscript'}`
+    : kernelMessage ?? 'R kernel unavailable'
+
   return (
     <div className="palette-settings">
       <div className="palette-settings-header">
@@ -283,9 +328,57 @@ function SettingsStub({
             {language === 'r' ? 'R' : 'JavaScript'} · switch
           </button>
         </label>
+
+        <div className="palette-pref-stack">
+          <span className="palette-pref-label" id="settings-rscript-label">
+            R path (Rscript)
+          </span>
+          <input
+            className="palette-pref-input"
+            type="text"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Auto-discover from PATH"
+            spellCheck={false}
+            autoComplete="off"
+            aria-labelledby="settings-rscript-label"
+            disabled={busy}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                void apply(draft.trim() || null)
+              }
+            }}
+          />
+          <div className="palette-pref-row">
+            <button
+              type="button"
+              className="palette-pref-action"
+              disabled={busy}
+              onClick={() => void apply(draft.trim() || null)}
+            >
+              Apply
+            </button>
+            <button
+              type="button"
+              className="palette-pref-action"
+              disabled={busy || (!rscriptPath && !draft.trim())}
+              onClick={() => {
+                setDraft('')
+                void apply(null)
+              }}
+            >
+              Clear
+            </button>
+          </div>
+          <p className={`palette-settings-status muted small ${kernelAvailable ? '' : 'is-warn'}`}>
+            {statusText}
+          </p>
+        </div>
+
         <p className="palette-settings-note muted small">
-          More preferences will land here. For now the palette is the settings entry point —
-          panels, run, and language live above.
+          Desktop packaging will reuse this override. Leave empty to find Rscript on PATH (or set{' '}
+          <code>CELLO_RSCRIPT</code>).
         </p>
       </div>
     </div>

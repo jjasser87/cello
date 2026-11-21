@@ -54,9 +54,10 @@ async function pathExists(target: string): Promise<boolean> {
   }
 }
 
-async function whichRscript(): Promise<string | null> {
+async function resolveRscript(override: string | null): Promise<string | null> {
   // Node PATH walk — no bash/cmd/sh. Soft-null when R is absent (Windows-safe).
-  return findRscript()
+  // Explicit override / CELLO_RSCRIPT skip PATH fallback on miss.
+  return findRscript({ override })
 }
 
 async function ensureJsonlite(rscript: string): Promise<void> {
@@ -98,6 +99,10 @@ class RKernelProcess {
   private version: string | null = null
   private lastError: string | null = null
   private unavailableReason: string | null = null
+  private rscriptOverride: string | null = null
+  private resolvedRscript: string | null = null
+  /** When true, ignore exit reason from an intentional stop/reconfigure. */
+  private suppressExitReason = false
 
   status() {
     return {
@@ -106,7 +111,35 @@ class RKernelProcess {
       version: this.version,
       message: this.unavailableReason,
       lastError: this.lastError,
+      rscriptPath: this.resolvedRscript,
+      rscriptOverride: this.rscriptOverride,
     }
+  }
+
+  /**
+   * Apply Settings R path override. Restarts the worker when the override changes.
+   * Pass `null` / empty string to clear and fall back to auto-discovery.
+   */
+  async configure(rscriptPath: string | null): Promise<ReturnType<RKernelProcess['status']>> {
+    const next =
+      typeof rscriptPath === 'string' && rscriptPath.trim() ? rscriptPath.trim() : null
+    if (next === this.rscriptOverride) {
+      return this.status()
+    }
+
+    this.rscriptOverride = next
+    this.stop()
+    this.unavailableReason = null
+    this.lastError = null
+    this.version = null
+    this.resolvedRscript = null
+
+    try {
+      await this.ensureStarted()
+    } catch {
+      /* status surfaces the reason */
+    }
+    return this.status()
   }
 
   async ensureStarted(): Promise<void> {
@@ -121,10 +154,13 @@ class RKernelProcess {
   }
 
   private async start(): Promise<void> {
-    const rscript = await whichRscript()
+    this.suppressExitReason = false
+    const rscript = await resolveRscript(this.rscriptOverride)
+    this.resolvedRscript = rscript
     if (!rscript) {
-      this.unavailableReason =
-        'R is not installed. Install R (r-base) and restart `npm run dev`.'
+      this.unavailableReason = this.rscriptOverride
+        ? `R path not found: ${this.rscriptOverride}. Check Settings → R path.`
+        : 'R is not installed. Install R (r-base) and restart `npm run dev`, or set Settings → R path.'
       throw new Error(this.unavailableReason)
     }
 
@@ -187,9 +223,11 @@ class RKernelProcess {
       child.on('close', (code) => {
         clearTimeout(bootTimer)
         const detail = stderr.trim() || `R worker exited (${code ?? '?'})`
-        this.lastError = detail
-        if (!this.unavailableReason) {
-          this.unavailableReason = detail
+        if (!this.suppressExitReason) {
+          this.lastError = detail
+          if (!this.unavailableReason) {
+            this.unavailableReason = detail
+          }
         }
         for (const [, pending] of this.pending) {
           clearTimeout(pending.timer)
@@ -198,7 +236,7 @@ class RKernelProcess {
         this.pending.clear()
         const wasBooted = this.booted
         this.cleanupChild()
-        if (!wasBooted) reject(new Error(detail))
+        if (!wasBooted && !this.suppressExitReason) reject(new Error(detail))
       })
     })
 
@@ -312,8 +350,11 @@ class RKernelProcess {
 
   stop() {
     if (this.child) {
+      this.suppressExitReason = true
       this.child.kill('SIGTERM')
       this.cleanupChild()
+      // suppressExitReason stays true until the next start() so async 'close'
+      // from this kill does not overwrite a fresh configure() failure reason.
     }
   }
 }
@@ -366,6 +407,18 @@ export function rKernelPlugin(): Plugin {
               }
             }
             sendJson(res, 200, kernel.status())
+            return
+          }
+
+          if (req.method === 'POST' && url === '/api/kernel/config') {
+            const body = (await readJson(req)) as { rscriptPath?: string | null }
+            const raw = body.rscriptPath
+            const pathValue =
+              raw === null || raw === undefined
+                ? null
+                : String(raw)
+            const status = await kernel.configure(pathValue)
+            sendJson(res, 200, status)
             return
           }
 

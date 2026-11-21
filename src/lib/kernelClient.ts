@@ -11,6 +11,10 @@ export interface KernelStatus {
   message?: string | null
   lastError?: string | null
   error?: string
+  /** Resolved Rscript path the host is using (or last attempted). */
+  rscriptPath?: string | null
+  /** Settings override currently applied on the host (`null` = auto-discover). */
+  rscriptOverride?: string | null
 }
 
 interface ApiRunResult {
@@ -152,8 +156,22 @@ export async function fetchKernelStatus(): Promise<KernelStatus> {
         err instanceof Error
           ? err.message
           : 'R kernel API unreachable. Is `npm run dev` running?',
+      rscriptPath: null,
+      rscriptOverride: null,
     }
   }
+}
+
+/** Apply or clear the Settings R path override on the Vite kernel host. */
+export async function configureKernelRscript(
+  rscriptPath: string | null,
+): Promise<KernelStatus> {
+  const res = await fetch('/api/kernel/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rscriptPath }),
+  })
+  return parseResponse(res)
 }
 
 export async function evalOnRKernel(code: string, cellId: string): Promise<RunArtifacts> {

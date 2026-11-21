@@ -1840,3 +1840,46 @@ code,
   margin: 0;
   line-height: 1.45;
 }
+
+.palette-pref-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.palette-pref-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg-elevated, rgba(255, 255, 255, 0.03));
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.55rem;
+}
+
+.palette-pref-input:focus {
+  outline: none;
+  border-color: rgba(196, 138, 58, 0.55);
+}
+
+.palette-pref-input:disabled {
+  opacity: 0.55;
+}
+
+.palette-pref-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.palette-settings-status {
+  margin: 0;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+.palette-settings-status.is-warn {
+  color: var(--wood-bright);
+}

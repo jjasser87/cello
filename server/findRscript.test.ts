@@ -70,6 +70,41 @@ describe('findRscript', () => {
     assert.equal(found, null)
   })
 
+  it('honors explicit override and skips PATH on miss', async () => {
+    const found = await findRscript({
+      platform: 'linux',
+      env: { PATH: '/usr/bin' },
+      override: '/custom/bin/Rscript',
+      pathExists: async (target) => target === '/custom/bin/Rscript',
+    })
+    assert.equal(found, '/custom/bin/Rscript')
+
+    const missing = await findRscript({
+      platform: 'linux',
+      env: { PATH: '/usr/bin' },
+      override: '/missing/Rscript',
+      pathExists: async (target) => target === '/usr/bin/Rscript',
+    })
+    assert.equal(missing, null)
+  })
+
+  it('honors CELLO_RSCRIPT when override is empty', async () => {
+    const found = await findRscript({
+      platform: 'linux',
+      env: { PATH: '/usr/bin', CELLO_RSCRIPT: '/opt/R/bin/Rscript' },
+      pathExists: async (target) => target === '/opt/R/bin/Rscript',
+    })
+    assert.equal(found, '/opt/R/bin/Rscript')
+
+    const ignored = await findRscript({
+      platform: 'linux',
+      env: { PATH: '/usr/bin', CELLO_RSCRIPT: '/opt/R/bin/Rscript' },
+      honorEnv: false,
+      pathExists: async (target) => target === '/usr/bin/Rscript',
+    })
+    assert.equal(ignored, '/usr/bin/Rscript')
+  })
+
   it('simulates missing bash: lookup still succeeds via PATH walk', async () => {
     // Regression for spawn bash ENOENT — lookup must not need any shell binary.
     const shellBinaries = new Set([
