@@ -70,7 +70,7 @@ sales <- data.frame(month = c("Jan", "Feb"), revenue = c(42, 51))
 
 If R was built without PNG (or the PNG device cannot open), the cell still runs and Console notes that native plot capture is unavailable. Structured `cello.plot` keeps working either way. Explicit `cello.plot(...)` / `cello.table(...)` in a cell win over native capture from the same cell.
 
-API used by the UI (dev server only):
+API used by the UI (Vite dev middleware and Electron desktop host):
 
 - `GET /api/kernel/status` (includes `rscriptPath` / `rscriptOverride` when known)
 - `POST /api/kernel/config` `{ "rscriptPath": "/path/to/Rscript" | null }` — Settings override; restarts the worker
@@ -78,6 +78,29 @@ API used by the UI (dev server only):
 - `POST /api/kernel/reset`
 - `POST /api/kernel/run-all` `{ "cells": [{ "id", "code" }] }`
 - `POST /api/kernel/complete` `{ "code", "cursor" }`
+
+## Desktop (Electron)
+
+The day-to-day development build remains `npm run dev` (Vite + browser). For the desktop shell:
+
+```bash
+npm install
+npm run desktop
+```
+
+That builds the Vite UI into `dist/`, then launches Electron. The Electron main process starts a **loopback-only** HTTP host that:
+
+1. Serves the built UI from `dist/`
+2. Runs the same R kernel session as the Vite plugin (`createKernelSession` in `server/rKernelHost.ts`) on `/api/kernel/*`
+3. Uses the **machine-installed R** (Settings → R path / `CELLO_RSCRIPT` / PATH)
+
+If you already have a fresh `dist/`:
+
+```bash
+npm run desktop:app
+```
+
+Installers / auto-update are not in this slice yet.
 
 ## Develop (JS-only fallback)
 
@@ -116,8 +139,8 @@ Open **Explain** from the ribbon (`Ex`), the ¶ toolbar icon, or the command pal
 
 ## Architecture (short)
 
-- Browser UI talks to `/api/kernel/*` when language is R.
-- `server/rKernelHost.ts` (Vite plugin) owns one `Rscript` child running `kernel/r/worker.R`.
+- Browser / Electron UI talks to `/api/kernel/*` when language is R.
+- `server/rKernelHost.ts` owns one `Rscript` child running `kernel/r/worker.R` — Vite plugin in `npm run dev`, Electron main in `npm run desktop`.
 - The worker keeps a shared `.GlobalEnv`, streams printed output into Console, and returns Env / Plot / Data payloads as JSON.
 - During each eval the worker opens a temporary PNG device (cairo when available) and, if `plot.new` / `grid.newpage` fire, returns `kind: "image"` with a `data:image/png;base64,…` payload for the Plot panel.
 - After each eval, if `cello.table` was not called, the worker auto-captures a visible or newly assigned `data.frame` / tibble / `matrix` into the Data payload for that cell.
