@@ -1358,12 +1358,14 @@ code,
   display: inline-flex;
   gap: 0.1rem;
   opacity: 0;
+  pointer-events: none;
   transition: opacity 120ms ease;
 }
 
 .file-row:hover .file-ops,
 .file-row:focus-within .file-ops {
   opacity: 1;
+  pointer-events: auto;
 }
 
 .file-ops button {

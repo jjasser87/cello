@@ -68,10 +68,9 @@ function buildFromProject(
   }
 }
 
-function buildFresh(language: KernelLanguage = 'r'): WorkspaceState {
+function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName()): WorkspaceState {
   const cells = scriptToCells(starterScript(language))
   const now = Date.now()
-  const name = defaultProjectName()
   return {
     cells,
     activeCellId: cells[0].id,
@@ -466,7 +465,8 @@ export function useWorkspace() {
     sharedRef.current = createSharedBag()
     const lang = language ?? stateRef.current.language
     setState((prev) => {
-      const fresh = buildFresh(lang)
+      // Distinct name so the Files panel clearly shows a fresh project.
+      const fresh = buildFresh(lang, 'untitled')
       return {
         ...fresh,
         kernelStatus: prev.kernelStatus,
