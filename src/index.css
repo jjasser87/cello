@@ -360,8 +360,10 @@ code,
   /*
    * Height tracks content (CellEditor sets inline height). No inner scroll —
    * the workspace page scrolls with wheel/touch instead.
+   * When Flow is open, --flow-frame-min grows the frame so the graph fits
+   * without a nested panel scrollbar.
    */
-  min-height: max(220px, var(--ribbon-track-min));
+  min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
   resize: none;
   overflow: hidden;
   white-space: pre;
@@ -659,11 +661,25 @@ code,
 }
 
 .side-panel-body {
-  /* Single overflow region so panel size stays fixed. */
+  /*
+   * Fixed panel size; wheel/touch still scroll when content overflows,
+   * but no nested scrollbar chrome (matches page-scroll design).
+   */
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: none;
   padding: 0.9rem 1rem;
+}
+
+.side-panel-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Flow: grow the cell frame so the graph fits; page scrolls instead of clipping. */
+.side-panel-body.is-flow {
+  overflow: hidden;
 }
 
 .console-panel {
@@ -1345,6 +1361,17 @@ code,
 
   .side-panel-body {
     min-height: 0;
+    overflow: auto;
+    scrollbar-width: none;
+  }
+
+  .side-panel-body::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  /* Stacked Flow: keep wheel overflow without a visible slider. */
+  .side-panel-body.is-flow {
     overflow: auto;
   }
 

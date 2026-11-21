@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
@@ -24,9 +24,12 @@ export function SidePanel({ api }: SidePanelProps) {
   const { state, toggleSidePanel, collapseSidePanel } = api
   const open = state.sidePanelOpen
 
+  const isFlow = open && state.activePanel === 'structure'
+
   return (
     <aside
-      className={`side-shell ${open ? 'is-open' : 'is-collapsed'}`}
+      className={`side-shell ${open ? 'is-open' : 'is-collapsed'}${isFlow ? ' is-flow' : ''}`}
+      data-panel={open ? state.activePanel : undefined}
       aria-label={open ? `${state.activePanel} panel` : 'Panel ribbon'}
     >
       {/*
@@ -41,7 +44,7 @@ export function SidePanel({ api }: SidePanelProps) {
       >
         <div className="side-panel">
           <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
-          <div className="side-panel-body">
+          <div className={`side-panel-body${isFlow ? ' is-flow' : ''}`}>
             {state.activePanel === 'cells' && <CellsPanel api={api} />}
             {state.activePanel === 'history' && <HistoryPanel api={api} />}
             {state.activePanel === 'plot' && <PlotPanel api={api} />}
@@ -470,8 +473,40 @@ function DataPanel({ api }: SidePanelProps) {
 
 function StructurePanel({ api }: SidePanelProps) {
   const { state, selectCell } = api
+  const rootRef = useRef<HTMLDivElement>(null)
+
+  // Flow prefers page scroll: grow the cell frame to fit the graph so the
+  // side panel does not need a nested scrollbar/slider.
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (!root) return
+    const lane = root.closest('.workspace-lane')
+    if (!(lane instanceof HTMLElement)) return
+
+    const apply = () => {
+      const panel = root.closest('.side-panel')
+      const header = panel?.querySelector('.panel-header')
+      const body = root.closest('.side-panel-body')
+      const headerH = header instanceof HTMLElement ? header.offsetHeight : 0
+      const bodyStyle = body instanceof HTMLElement ? getComputedStyle(body) : null
+      const padY = bodyStyle
+        ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0)
+        : 0
+      const needed = Math.ceil(headerH + padY + root.scrollHeight)
+      lane.style.setProperty('--flow-frame-min', `${needed}px`)
+    }
+
+    apply()
+    const ro = new ResizeObserver(apply)
+    ro.observe(root)
+    return () => {
+      ro.disconnect()
+      lane.style.removeProperty('--flow-frame-min')
+    }
+  }, [state.cells, state.language, state.activeCellId, state.scriptPath])
+
   return (
-    <div className="structure-panel">
+    <div className="structure-panel" ref={rootRef}>
       <div className="structure-file">
         <span className="mono">{state.scriptPath}</span>
       </div>
