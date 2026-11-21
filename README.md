@@ -11,7 +11,7 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - Side ribbon collapsed by default; click a mode to expand (click again / Collapse to return)
 - Plain-text scripts with `# %%` (R) or `// %%` (JS) cell markers
 - Focused cell editor with rename / reorder / run
-- Panels: Cells, History, Plot, Files, Env, Data, Flow (auto Mermaid-style cell graph), Console, Agent
+- Panels: Cells, History, Plot, Files, Env, Data, Flow (auto Mermaid-style cell graph), Console, Agent — fixed size, no nested scrollbar chrome (Flow grows with the cell / page scroll)
 - **R kernel** (local process via Vite dev middleware) plus in-browser JavaScript fallback
 - `cello.plot` / `cello.table` helpers in both languages
 - Native R graphics capture: base `plot()` / printed `ggplot()` appear in Plot (PNG via the R worker)
