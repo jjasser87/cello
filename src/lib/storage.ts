@@ -1,51 +1,36 @@
-import type { ExplanationComment, KernelLanguage, WorkspaceState } from '../types'
-import { ensureExplanation } from './explanation'
-import { cellsToScript } from './script'
+import type { KernelLanguage, WorkspaceState } from '../types'
+import {
+  hydratePersistedCell,
+  parseProject,
+  serializeProject,
+  stringifyProject,
+  type CelloProjectV1,
+  type PersistedCell,
+} from './projectFile'
 
-const KEY = 'cello.workspace.v0'
+export type { PersistedCell, CelloProjectV1 }
+export { hydratePersistedCell }
 
-export type PersistedCell = {
-  id: string
-  name: string
-  code: string
-  explanation?: string
-  comments?: ExplanationComment[]
-}
+const KEY_V1 = 'cello.workspace.v1'
+const KEY_V0 = 'cello.workspace.v0'
 
 /**
- * Workspace persistence (localStorage).
+ * Workspace persistence (localStorage) — same schema as the downloadable
+ * `.cello` project file (`cello-project` v1).
  *
- * Payload shape:
- * ```json
- * {
- *   "script": "<plain-text # %% / // %% export>",
- *   "cells": [{ "id", "name", "code", "explanation", "comments" }],
- *   "activeCellId", "activePanel", "scriptPath", "language"
- * }
- * ```
- *
- * Script export (`⇩` / `cellsToScript`) stays code-only with cell markers.
- * Explanations + comments live in the `cells[]` JSON above (not embedded in
- * the `.R` / `.js` file). Re-importing a plain script seeds empty explanation
- * templates; a full workspace restore from localStorage keeps docs + comments.
+ * Runtime artifacts (plots, tables, env, history, console) are not stored.
+ * Plain script export (`⇩` / `cellsToScript`) stays code-only with cell markers.
  */
 export function saveWorkspace(state: WorkspaceState): { ok: true } | { ok: false; error: string } {
-  const payload = {
-    script: cellsToScript(state.cells, state.language),
-    cells: state.cells.map(({ id, name, code, explanation, comments }) => ({
-      id,
-      name,
-      code,
-      explanation: explanation ?? ensureExplanation(''),
-      comments: comments ?? [],
-    })),
-    activeCellId: state.activeCellId,
-    activePanel: state.activePanel,
-    scriptPath: state.scriptPath,
-    language: state.language,
-  }
+  const project = serializeProject(state)
   try {
-    localStorage.setItem(KEY, JSON.stringify(payload))
+    localStorage.setItem(KEY_V1, stringifyProject(project))
+    // Drop legacy key once v1 is written successfully.
+    try {
+      localStorage.removeItem(KEY_V0)
+    } catch {
+      /* ignore */
+    }
     return { ok: true }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -53,37 +38,32 @@ export function saveWorkspace(state: WorkspaceState): { ok: true } | { ok: false
   }
 }
 
-export function loadWorkspace(): Partial<{
-  cells: PersistedCell[]
-  activeCellId: string
-  activePanel: WorkspaceState['activePanel']
-  scriptPath: string
-  language: KernelLanguage
-}> | null {
+export function loadWorkspace(): CelloProjectV1 | null {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as ReturnType<typeof loadWorkspace>
+    const v1 = localStorage.getItem(KEY_V1)
+    if (v1) {
+      const parsed = parseProject(v1)
+      return parsed.ok ? parsed.project : null
+    }
+    const v0 = localStorage.getItem(KEY_V0)
+    if (!v0) return null
+    const parsed = parseProject(v0)
+    return parsed.ok ? parsed.project : null
   } catch {
     return null
   }
 }
 
-/** Normalize a persisted / partial cell into a full Cell-shaped seed. */
-export function hydratePersistedCell(cell: PersistedCell): {
-  id: string
-  name: string
-  code: string
-  explanation: string
-  comments: ExplanationComment[]
-  status: 'idle'
-} {
-  return {
-    id: cell.id,
-    name: cell.name,
-    code: cell.code,
-    explanation: ensureExplanation(cell.explanation),
-    comments: Array.isArray(cell.comments) ? cell.comments : [],
-    status: 'idle',
-  }
+export function exportProjectJson(state: WorkspaceState): string {
+  return stringifyProject(serializeProject(state))
+}
+
+export type LoadedWorkspaceFields = {
+  cells: PersistedCell[]
+  activeCellId: string
+  activePanel: WorkspaceState['activePanel']
+  scriptPath: string
+  language: KernelLanguage
+  files: WorkspaceState['files']
+  meta: WorkspaceState['meta']
 }

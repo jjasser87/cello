@@ -86,6 +86,12 @@ export interface ProjectFile {
   children?: ProjectFile[]
 }
 
+export interface ProjectMeta {
+  name: string
+  createdAt: number
+  updatedAt: number
+}
+
 export interface WorkspaceState {
   cells: Cell[]
   activeCellId: string
@@ -107,6 +113,9 @@ export interface WorkspaceState {
   activeTableId: string | null
   env: EnvBinding[]
   consoleLines: string[]
+  /** Project file tree shown in the Files ribbon panel. */
   files: ProjectFile[]
+  /** Durable project metadata (name + timestamps) for `.cello` save. */
+  meta: ProjectMeta
   scriptPath: string
 }

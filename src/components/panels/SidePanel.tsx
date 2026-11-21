@@ -2,8 +2,9 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { PanelId, ProjectFile } from '../../types'
+import type { PanelId } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
+import { FilesPanel } from './FilesPanel'
 
 const RIBBON_ITEMS: { id: PanelId; label: string; short: string }[] = [
   { id: 'cells', label: 'Cells', short: 'Ce' },
@@ -90,7 +91,7 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
     explain: { title: 'Explain', blurb: 'Purpose doc for this cell.' },
     history: { title: 'History', blurb: 'Runs for the selected cell.' },
     plot: { title: 'Plot', blurb: 'Plot from the selected cell.' },
-    files: { title: 'Files', blurb: 'Project tree.' },
+    files: { title: 'Files', blurb: 'Project file structure.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
     data: { title: 'Data', blurb: 'Table from the selected cell.' },
     structure: { title: 'Script flow', blurb: 'Auto graph of how cells connect.' },
@@ -375,33 +376,6 @@ function LineChart({
         ))}
       </div>
     </div>
-  )
-}
-
-function FilesPanel({ api }: SidePanelProps) {
-  return (
-    <div className="file-tree">
-      <p className="muted small">
-        Active script: <code>{api.state.scriptPath}</code> (<code>// %%</code> cells)
-      </p>
-      <FileNode nodes={api.state.files} depth={0} />
-    </div>
-  )
-}
-
-function FileNode({ nodes, depth }: { nodes: ProjectFile[]; depth: number }) {
-  return (
-    <ul style={{ paddingLeft: depth ? 14 : 0 }}>
-      {nodes.map((node) => (
-        <li key={node.id}>
-          <span className="file-row">
-            <span aria-hidden>{node.kind === 'folder' ? '▸' : '·'}</span>
-            {node.name}
-          </span>
-          {node.children ? <FileNode nodes={node.children} depth={depth + 1} /> : null}
-        </li>
-      ))}
-    </ul>
   )
 }
 

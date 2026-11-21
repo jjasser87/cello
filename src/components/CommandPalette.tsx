@@ -10,13 +10,16 @@ export type CommandId =
   | 'run-all'
   | 'reset'
   | 'toggle-language'
+  | 'new-project'
+  | 'save-project'
+  | 'open-project'
   | 'settings'
 
 export interface CommandItem {
   id: CommandId
   label: string
   hint?: string
-  group: 'Navigate' | 'Panels' | 'Kernel' | 'Settings'
+  group: 'Navigate' | 'Panels' | 'Kernel' | 'Project' | 'Settings'
 }
 
 const PANEL_COMMANDS: { id: PanelId; label: string }[] = [
@@ -81,6 +84,24 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
       label: language === 'r' ? 'Switch to JavaScript' : 'Switch to R',
       hint: language === 'r' ? 'R → JS' : 'JS → R',
       group: 'Kernel',
+    },
+    {
+      id: 'new-project',
+      label: 'New project',
+      hint: 'Starter cells + file tree',
+      group: 'Project',
+    },
+    {
+      id: 'save-project',
+      label: 'Save project…',
+      hint: '.cello',
+      group: 'Project',
+    },
+    {
+      id: 'open-project',
+      label: 'Open project…',
+      hint: '.cello',
+      group: 'Project',
     },
     {
       id: 'settings',
@@ -150,7 +171,7 @@ export function CommandPalette({
     onRun(item.id)
   }
 
-  const groups = (['Navigate', 'Panels', 'Kernel', 'Settings'] as const)
+  const groups = (['Navigate', 'Panels', 'Kernel', 'Project', 'Settings'] as const)
     .map((group) => ({
       group,
       items: filtered
