@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { highlightHtml } from '../lib/highlight'
 import {
   completeOnRKernel,
   localCompletions,
@@ -257,6 +258,9 @@ export function CellEditor({
     }, COMPLETE_DEBOUNCE_MS)
   }
 
+  // Dual-layer highlight: colored <pre> under a transparent textarea (same metrics).
+  const highlighted = highlightHtml(cell.code, language)
+
   return (
     <section className="cell-editor" aria-label={`Editing ${cell.name}`}>
       <div className="cell-header">
@@ -277,116 +281,123 @@ export function CellEditor({
       */}
       <div className="workspace-lane">
         <main className="main-window" ref={frameRef}>
-          <textarea
-            ref={ref}
-            className="code-area"
-            cols={80}
-            spellCheck={false}
-            wrap="off"
-            value={cell.code}
-            aria-autocomplete={language === 'r' ? 'list' : undefined}
-            aria-controls={visiblePopup ? 'r-completion-list' : undefined}
-            aria-expanded={language === 'r' ? Boolean(visiblePopup) : undefined}
-            onChange={(event) => {
-              onChange(event.target.value)
-              if (language !== 'r') {
-                dismissPopup()
-                return
-              }
-              const ch = event.target.value[event.target.selectionStart - 1]
-              // `$` / `:` need an immediate kernel round-trip — no local list.
-              if (ch === '$' || ch === ':') {
-                if (debounceRef.current) clearTimeout(debounceRef.current)
-                void openCompletions()
-              } else {
-                scheduleCompletions()
-              }
-            }}
-            onBlur={() => {
-              // Delay so a mousedown on a completion item can fire first.
-              window.setTimeout(() => {
-                if (document.activeElement !== ref.current) dismissPopup()
-              }, 120)
-            }}
-            onClick={() => dismissPopup()}
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                event.preventDefault()
-                event.stopPropagation()
-                dismissPopup()
-                onRun()
-                return
-              }
-              // Alt+↑/↓ jump cells without fighting textarea caret motion.
-              if (event.altKey && !event.metaKey && !event.ctrlKey) {
-                if (event.key === 'ArrowUp') {
+          <div className="code-surface">
+            <pre
+              className="code-highlight"
+              aria-hidden="true"
+              dangerouslySetInnerHTML={{ __html: highlighted }}
+            />
+            <textarea
+              ref={ref}
+              className="code-area"
+              cols={80}
+              spellCheck={false}
+              wrap="off"
+              value={cell.code}
+              aria-autocomplete={language === 'r' ? 'list' : undefined}
+              aria-controls={visiblePopup ? 'r-completion-list' : undefined}
+              aria-expanded={language === 'r' ? Boolean(visiblePopup) : undefined}
+              onChange={(event) => {
+                onChange(event.target.value)
+                if (language !== 'r') {
+                  dismissPopup()
+                  return
+                }
+                const ch = event.target.value[event.target.selectionStart - 1]
+                // `$` / `:` need an immediate kernel round-trip — no local list.
+                if (ch === '$' || ch === ':') {
+                  if (debounceRef.current) clearTimeout(debounceRef.current)
+                  void openCompletions()
+                } else {
+                  scheduleCompletions()
+                }
+              }}
+              onBlur={() => {
+                // Delay so a mousedown on a completion item can fire first.
+                window.setTimeout(() => {
+                  if (document.activeElement !== ref.current) dismissPopup()
+                }, 120)
+              }}
+              onClick={() => dismissPopup()}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
                   event.preventDefault()
                   event.stopPropagation()
                   dismissPopup()
-                  onPrevCell()
+                  onRun()
                   return
                 }
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  dismissPopup()
-                  onNextCell()
-                  return
+                // Alt+↑/↓ jump cells without fighting textarea caret motion.
+                if (event.altKey && !event.metaKey && !event.ctrlKey) {
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    dismissPopup()
+                    onPrevCell()
+                    return
+                  }
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    dismissPopup()
+                    onNextCell()
+                    return
+                  }
                 }
-              }
 
-              if (language === 'r' && visiblePopup) {
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  setPopup({
-                    ...visiblePopup,
-                    index: (visiblePopup.index + 1) % visiblePopup.items.length,
-                  })
-                  return
+                if (language === 'r' && visiblePopup) {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault()
+                    setPopup({
+                      ...visiblePopup,
+                      index: (visiblePopup.index + 1) % visiblePopup.items.length,
+                    })
+                    return
+                  }
+                  if (event.key === 'ArrowUp') {
+                    event.preventDefault()
+                    setPopup({
+                      ...visiblePopup,
+                      index:
+                        (visiblePopup.index - 1 + visiblePopup.items.length) %
+                        visiblePopup.items.length,
+                    })
+                    return
+                  }
+                  if (event.key === 'Enter' || event.key === 'Tab') {
+                    event.preventDefault()
+                    applyCompletion(
+                      visiblePopup.items[visiblePopup.index],
+                      visiblePopup.prefix,
+                    )
+                    return
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    dismissPopup()
+                    return
+                  }
                 }
-                if (event.key === 'ArrowUp') {
-                  event.preventDefault()
-                  setPopup({
-                    ...visiblePopup,
-                    index:
-                      (visiblePopup.index - 1 + visiblePopup.items.length) %
-                      visiblePopup.items.length,
-                  })
-                  return
-                }
-                if (event.key === 'Enter' || event.key === 'Tab') {
-                  event.preventDefault()
-                  applyCompletion(
-                    visiblePopup.items[visiblePopup.index],
-                    visiblePopup.prefix,
-                  )
-                  return
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  dismissPopup()
-                  return
-                }
-              }
 
-              // Keep Shift+Tab for focus navigation out of the editor.
-              if (event.key === 'Tab' && !event.shiftKey) {
-                event.preventDefault()
-                if (language === 'r') {
-                  void openCompletions({ explicit: true }).then((opened) => {
-                    if (!opened) insertTabSpaces()
-                  })
-                  return
+                // Keep Shift+Tab for focus navigation out of the editor.
+                if (event.key === 'Tab' && !event.shiftKey) {
+                  event.preventDefault()
+                  if (language === 'r') {
+                    void openCompletions({ explicit: true }).then((opened) => {
+                      if (!opened) insertTabSpaces()
+                    })
+                    return
+                  }
+                  insertTabSpaces()
                 }
-                insertTabSpaces()
+              }}
+              placeholder={
+                language === 'r'
+                  ? '# Write the focused R cell here…'
+                  : '// Write the focused cell here…'
               }
-            }}
-            placeholder={
-              language === 'r'
-                ? '# Write the focused R cell here…'
-                : '// Write the focused cell here…'
-            }
-          />
+            />
+          </div>
           {visiblePopup ? (
             <ul
               id="r-completion-list"
