@@ -35,11 +35,39 @@ interface Pending {
   timer: NodeJS.Timeout
 }
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const WORKER = path.join(ROOT, 'kernel', 'r', 'worker.R')
-const LIB_DIR = path.join(ROOT, 'kernel', 'r', '.lib')
 const REQUEST_TIMEOUT_MS = 60_000
 const COMPLETE_TIMEOUT_MS = 5_000
+
+/** Paths for the R worker script and writable package lib. */
+export type KernelPaths = {
+  /** App / repo root (spawn cwd; used for relative path defaults). */
+  root: string
+  /** Absolute path to `worker.R` (must be a real filesystem path — not inside asar). */
+  worker: string
+  /** Writable directory for R packages (`jsonlite`, etc.). */
+  libDir: string
+}
+
+export type CreateKernelSessionOptions = {
+  root?: string
+  workerPath?: string
+  libDir?: string
+}
+
+function defaultRoot(): string {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+}
+
+export function resolveKernelPaths(options: CreateKernelSessionOptions = {}): KernelPaths {
+  const root = options.root ? path.resolve(options.root) : defaultRoot()
+  const worker = options.workerPath
+    ? path.resolve(options.workerPath)
+    : path.join(root, 'kernel', 'r', 'worker.R')
+  const libDir = options.libDir
+    ? path.resolve(options.libDir)
+    : path.join(root, 'kernel', 'r', '.lib')
+  return { root, worker, libDir }
+}
 
 function createId(): string {
   return `req_${Math.random().toString(36).slice(2, 10)}`
@@ -60,9 +88,9 @@ async function resolveRscript(override: string | null): Promise<string | null> {
   return findRscript({ override })
 }
 
-async function ensureJsonlite(rscript: string): Promise<void> {
-  await mkdir(LIB_DIR, { recursive: true })
-  const marker = path.join(LIB_DIR, 'jsonlite')
+async function ensureJsonlite(rscript: string, libDir: string): Promise<void> {
+  await mkdir(libDir, { recursive: true })
+  const marker = path.join(libDir, 'jsonlite')
   if (await pathExists(marker)) return
 
   await new Promise<void>((resolve, reject) => {
@@ -70,12 +98,12 @@ async function ensureJsonlite(rscript: string): Promise<void> {
       rscript,
       [
         '-e',
-        `install.packages("jsonlite", repos="https://cloud.r-project.org", lib=${JSON.stringify(LIB_DIR)})`,
+        `install.packages("jsonlite", repos="https://cloud.r-project.org", lib=${JSON.stringify(libDir)})`,
       ],
       {
         env: {
           ...process.env,
-          R_LIBS_USER: LIB_DIR,
+          R_LIBS_USER: libDir,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
@@ -103,6 +131,11 @@ class RKernelProcess {
   private resolvedRscript: string | null = null
   /** When true, ignore exit reason from an intentional stop/reconfigure. */
   private suppressExitReason = false
+  private readonly paths: KernelPaths
+
+  constructor(paths: KernelPaths) {
+    this.paths = paths
+  }
 
   status() {
     return {
@@ -165,7 +198,7 @@ class RKernelProcess {
     }
 
     try {
-      await ensureJsonlite(rscript)
+      await ensureJsonlite(rscript, this.paths.libDir)
     } catch (err) {
       this.unavailableReason =
         err instanceof Error
@@ -175,12 +208,12 @@ class RKernelProcess {
     }
 
     this.ready = new Promise<void>((resolve, reject) => {
-      const child = spawn(rscript, ['--vanilla', WORKER], {
-        cwd: ROOT,
+      const child = spawn(rscript, ['--vanilla', this.paths.worker], {
+        cwd: this.paths.root,
         env: {
           ...process.env,
-          R_LIBS_USER: LIB_DIR,
-          R_LIBS: LIB_DIR,
+          R_LIBS_USER: this.paths.libDir,
+          R_LIBS: this.paths.libDir,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       })
@@ -393,8 +426,8 @@ export type KernelSession = {
   handleApi: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
 }
 
-export function createKernelSession(): KernelSession {
-  const kernel = new RKernelProcess()
+export function createKernelSession(options: CreateKernelSessionOptions = {}): KernelSession {
+  const kernel = new RKernelProcess(resolveKernelPaths(options))
 
   return {
     ensureStarted: () => kernel.ensureStarted(),

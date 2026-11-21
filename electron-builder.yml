@@ -1,0 +1,53 @@
+appId: app.cello.desktop
+productName: Cello
+copyright: Copyright © Cello contributors
+
+directories:
+  output: release
+  buildResources: build
+
+# Packaged entry: pre-bundled ESM (no tsx / TypeScript at runtime).
+# files filter excludes node_modules; UI is in dist/, main is bundled.
+extraMetadata:
+  main: electron/main-bundle.mjs
+
+# UI + bundled main only. React/Vite stay out of the package (already in dist/).
+files:
+  - dist/**/*
+  - electron/main-bundle.mjs
+  - package.json
+  - '!node_modules/**/*'
+
+# Rscript cannot read asar; ship worker.R as a real file under resources/.
+extraResources:
+  - from: kernel/r/worker.R
+    to: kernel/r/worker.R
+
+asar: true
+npmRebuild: false
+nodeGypRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  # Unsigned for now — CI/Windows builds still produce installable artifacts.
+  signAndEditExecutable: false
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Cello
+  artifactName: Cello-Setup-${version}-${arch}.${ext}
+  deleteAppDataOnUninstall: false
+
+portable:
+  artifactName: Cello-Portable-${version}-${arch}.${ext}
+
+# Linux/macOS targets can be added later; Windows is the current installer ask.

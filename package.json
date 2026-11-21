@@ -2,6 +2,8 @@
   "name": "cello",
   "private": true,
   "version": "0.1.0",
+  "description": "Cello — a minimalist, cell-based development environment",
+  "author": "Cello contributors",
   "type": "module",
   "main": "electron/main.mjs",
   "allowScripts": {
@@ -19,6 +21,10 @@
     "predesktop:app": "npm run desktop:install",
     "desktop:app": "electron .",
     "desktop:smoke": "npm run build && node electron/smoke-host.mjs",
+    "desktop:bundle": "node scripts/bundle-electron-main.mjs",
+    "desktop:dist:prepare": "npm run build && npm run desktop:bundle",
+    "desktop:dist:win": "node scripts/dist-win.mjs",
+    "desktop:dist:win:dir": "node scripts/dist-win.mjs --dir",
     "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts",
     "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
     "test:flow-graph": "node --experimental-strip-types --test src/lib/flowGraph.test.ts",
@@ -40,10 +46,11 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^39.2.3",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
     "oxlint": "^1.90.0",
     "tsx": "^4.20.6",
     "typescript": "~7.0.2",
     "vite": "^8.3.6"
-  },
-  "description": "Cello — a minimalist, cell-based development environment"
+  }
 }

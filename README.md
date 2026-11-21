@@ -145,7 +145,38 @@ npm run desktop:install
 npm run desktop
 ```
 
-Installers / auto-update are not in this slice yet.
+### Windows installer (no local `npm` Electron postinstall)
+
+End users should install a **prebuilt Windows app**, not fight `node_modules/electron` on their machine. The installer bundles Electron; they still need a **machine-installed R** (Settings → R path if needed).
+
+**Artifacts** (from CI or a local Windows build):
+
+| File | Use |
+| --- | --- |
+| `Cello-Setup-<version>-x64.exe` | NSIS installer (Start Menu + optional dir) |
+| `Cello-Portable-<version>-x64.exe` | Portable single-folder exe (no install) |
+
+Download the latest CI artifacts from the **Windows desktop installer** workflow (Actions → workflow run → `cello-windows-installer`), or build locally on Windows:
+
+```powershell
+npm ci
+npm run desktop:dist:win
+# outputs under release\
+```
+
+That command builds the Vite UI, bundles the Electron main process (`electron/main-bundle.mjs`), and runs `electron-builder` (NSIS + portable). Electron’s binary is fetched by electron-builder for the Windows target — users of the `.exe` never run `npm install` / `desktop:install`.
+
+**CI:** `.github/workflows/windows-desktop.yml` builds on `windows-latest` (push/PR when desktop packaging paths change, or `workflow_dispatch`) and uploads the setup + portable executables.
+
+**Linux/macOS note:** prefer the GitHub Actions job (or a Windows machine) for the full `npm run desktop:dist:win` (NSIS + portable). Cross-building NSIS needs a working Wine; portable / zip usually work without it:
+
+```bash
+npm run desktop:dist:prepare
+npx electron-builder --win portable --x64   # release/Cello-Portable-*.exe
+npx electron-builder --win zip --x64        # release/Cello-*.zip (unpacked dir)
+```
+
+Auto-update / code signing are not in this slice yet.
 
 ## Develop (JS-only fallback)
 
