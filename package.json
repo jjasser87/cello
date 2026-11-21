@@ -4,12 +4,19 @@
   "version": "0.1.0",
   "type": "module",
   "main": "electron/main.mjs",
+  "allowScripts": {
+    "electron": true,
+    "esbuild": true
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "desktop:install": "node scripts/ensure-electron.mjs",
+    "predesktop": "npm run desktop:install",
     "desktop": "npm run build && electron .",
+    "predesktop:app": "npm run desktop:install",
     "desktop:app": "electron .",
     "desktop:smoke": "npm run build && node electron/smoke-host.mjs",
     "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts",

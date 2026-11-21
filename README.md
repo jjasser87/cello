@@ -88,7 +88,9 @@ npm install
 npm run desktop
 ```
 
-That builds the Vite UI into `dist/`, then launches Electron. The Electron main process starts a **loopback-only** HTTP host that:
+That builds the Vite UI into `dist/`, then launches Electron. `npm run desktop` (and `desktop:app`) first run `desktop:install`, which downloads Electron’s binary if `path.txt` / `dist/` are missing.
+
+The Electron main process starts a **loopback-only** HTTP host that:
 
 1. Serves the built UI from `dist/`
 2. Runs the same R kernel session as the Vite plugin (`createKernelSession` in `server/rKernelHost.ts`) on `/api/kernel/*`
@@ -99,6 +101,38 @@ If you already have a fresh `dist/`:
 ```bash
 npm run desktop:app
 ```
+
+### npm install scripts (Electron / esbuild)
+
+npm 12+ blocks dependency install scripts unless they are listed in `package.json` `allowScripts`. Cello commits approvals for **electron** (required — downloads the desktop binary) and **esbuild** (used by Vite/tsx). With that field present, a normal `npm install` should run Electron’s postinstall.
+
+If you still see a warning that `electron` / `esbuild` scripts are not covered, or `npm run desktop` fails with **Electron failed to install correctly**, approve once and repair:
+
+```bash
+# npm 12+: write name-only approvals (any version)
+npm install-scripts approve --no-allow-scripts-pin electron esbuild
+# alias: npm approve-scripts --no-allow-scripts-pin electron esbuild
+```
+
+**PowerShell (Windows)** — if the binary is already missing:
+
+```powershell
+npm install-scripts approve --no-allow-scripts-pin electron esbuild
+Remove-Item -Recurse -Force node_modules\electron
+npm install
+npm run desktop
+```
+
+**bash / zsh:**
+
+```bash
+npm install-scripts approve --no-allow-scripts-pin electron esbuild
+rm -rf node_modules/electron
+npm install
+npm run desktop
+```
+
+Or, without deleting: `npm run desktop:install` (re-runs `electron/install.js`) / `npm rebuild electron` after approving.
 
 Installers / auto-update are not in this slice yet.
 
