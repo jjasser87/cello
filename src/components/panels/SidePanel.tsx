@@ -252,7 +252,7 @@ function PlotPanel({ api }: SidePanelProps) {
 
   if (!plot) {
     return (
-      <EmptyState text="No plot for this cell. Call cello.plot({ labels, values }) — this panel opens automatically." />
+      <EmptyState text="No plot for this cell. Use plot() / ggplot(), or cello.plot({ labels, values }) — this panel opens automatically." />
     )
   }
 
@@ -262,7 +262,13 @@ function PlotPanel({ api }: SidePanelProps) {
         <h3>{plot.title}</h3>
         <span className="muted">{plot.kind}</span>
       </div>
-      {plot.kind === 'line' ? <LineChart plot={plot} /> : <BarChart plot={plot} />}
+      {plot.kind === 'image' && plot.imageData ? (
+        <img className="plot-image" src={plot.imageData} alt={plot.title} />
+      ) : plot.kind === 'line' ? (
+        <LineChart plot={plot} />
+      ) : (
+        <BarChart plot={plot} />
+      )}
       {cellPlots.length > 1 ? (
         <ul className="plot-list">
           {cellPlots

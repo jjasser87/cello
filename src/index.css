@@ -783,6 +783,16 @@ code,
   color: var(--ink);
 }
 
+.plot-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
 .bar-chart {
   height: 200px;
   display: grid;

@@ -14,6 +14,7 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - Panels: Cells, History, Plot, Files, Env, Data, Flow, Console, Agent
 - **R kernel** (local process via Vite dev middleware) plus in-browser JavaScript fallback
 - `cello.plot` / `cello.table` helpers in both languages
+- Native R graphics capture: base `plot()` / printed `ggplot()` appear in Plot (PNG via the R worker)
 - Plot + data panels auto-expand when a cell produces them
 - Local persistence of the working script
 
@@ -42,6 +43,19 @@ cello.plot(list(
 console$log("hello")
 ```
 
+Native graphics (no helper required) also fill Plot for that cell:
+
+```r
+plot(1:10, main = "base plot")
+
+# optional — install ggplot2 yourself if you want ggplot
+# install.packages("ggplot2")
+library(ggplot2)
+ggplot(data.frame(x = 1:5, y = c(2, 4, 3, 5, 4)), aes(x, y)) + geom_line()
+```
+
+If R was built without PNG (or the PNG device cannot open), the cell still runs and Console notes that native plot capture is unavailable. Structured `cello.plot` keeps working either way. Explicit `cello.plot(...)` in a cell wins over a native image from the same cell.
+
 API used by the UI (dev server only):
 
 - `GET /api/kernel/status`
@@ -68,5 +82,6 @@ Cell source is normalized (CRLF → LF, strip BOM) before R `parse()`, so Window
 - Browser UI talks to `/api/kernel/*` when language is R.
 - `server/rKernelHost.ts` (Vite plugin) owns one `Rscript` child running `kernel/r/worker.R`.
 - The worker keeps a shared `.GlobalEnv`, streams printed output into Console, and returns Env / Plot / Data payloads as JSON.
+- During each eval the worker opens a temporary PNG device (cairo when available) and, if `plot.new` / `grid.newpage` fire, returns `kind: "image"` with a `data:image/png;base64,…` payload for the Plot panel.
 
 See the project note at `docs/r-kernel-v1.md` in the Cello agent store for the v1 plan and deferred items.

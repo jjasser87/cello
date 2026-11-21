@@ -19,11 +19,13 @@ suppressPackageStartupMessages(library(jsonlite, quietly = TRUE))
 .cello_state$logs <- character(0)
 .cello_state$plot <- NULL
 .cello_state$table <- NULL
+.cello_state$native_plotted <- FALSE
 
 clear_artifacts <- function() {
   .cello_state$logs <- character(0)
   .cello_state$plot <- NULL
   .cello_state$table <- NULL
+  .cello_state$native_plotted <- FALSE
 }
 
 append_log <- function(...) {
@@ -257,6 +259,112 @@ normalize_source <- function(code) {
   text
 }
 
+# Soft-open a PNG device for base plot() / ggplot print / lattice / etc.
+# Returns the temp file path on success, or NULL when graphics are unavailable.
+open_native_plot_device <- function() {
+  if (!isTRUE(capabilities("png"))) {
+    append_log("Native plot capture unavailable: R was built without PNG support.")
+    return(NULL)
+  }
+
+  plot_file <- tempfile(fileext = ".png")
+  opened <- FALSE
+  err_msg <- NULL
+
+  if (isTRUE(capabilities("cairo"))) {
+    tryCatch(
+      {
+        grDevices::png(
+          filename = plot_file,
+          width = 720,
+          height = 480,
+          res = 96,
+          type = "cairo",
+          bg = "white"
+        )
+        opened <- TRUE
+      },
+      error = function(e) {
+        err_msg <<- conditionMessage(e)
+      }
+    )
+  }
+
+  if (!opened) {
+    tryCatch(
+      {
+        grDevices::png(
+          filename = plot_file,
+          width = 720,
+          height = 480,
+          res = 96,
+          bg = "white"
+        )
+        opened <- TRUE
+      },
+      error = function(e) {
+        err_msg <<- conditionMessage(e)
+      }
+    )
+  }
+
+  if (!opened) {
+    append_log(paste(
+      "Native plot capture unavailable:",
+      if (is.null(err_msg)) "could not open PNG device" else err_msg
+    ))
+    unlink(plot_file)
+    return(NULL)
+  }
+
+  plot_file
+}
+
+mark_native_plotted <- function(...) {
+  .cello_state$native_plotted <- TRUE
+  invisible(NULL)
+}
+
+install_plot_hooks <- function() {
+  list(
+    plot.new = getHook("plot.new"),
+    grid.newpage = getHook("grid.newpage")
+  )
+}
+
+restore_plot_hooks <- function(previous) {
+  setHook("plot.new", previous$plot.new, "replace")
+  setHook("grid.newpage", previous$grid.newpage, "replace")
+}
+
+encode_native_plot <- function(plot_file) {
+  if (is.null(plot_file) || !isTRUE(.cello_state$native_plotted)) {
+    return(NULL)
+  }
+  if (!file.exists(plot_file)) return(NULL)
+  info <- file.info(plot_file)
+  if (is.na(info$size) || info$size < 32) return(NULL)
+
+  raw <- tryCatch(
+    readBin(plot_file, what = "raw", n = info$size),
+    error = function(e) NULL
+  )
+  if (is.null(raw) || length(raw) == 0) return(NULL)
+
+  b64 <- tryCatch(jsonlite::base64_enc(raw), error = function(e) NULL)
+  if (is.null(b64) || !nzchar(b64)) return(NULL)
+  # jsonlite wraps base64; newlines break data: URLs in the browser.
+  b64 <- gsub("[\r\n[:space:]]", "", b64)
+
+  list(
+    title = "Plot",
+    kind = "image",
+    imageData = paste0("data:image/png;base64,", b64),
+    labels = list(),
+    values = list()
+  )
+}
+
 run_eval <- function(req) {
   clear_artifacts()
   cell_id <- if (is.null(req$cellId)) "" else as.character(req$cellId)
@@ -264,9 +372,18 @@ run_eval <- function(req) {
 
   err <- NULL
   output_lines <- character(0)
+  plot_file <- NULL
+  previous_hooks <- NULL
 
   tryCatch(
     {
+      plot_file <- open_native_plot_device()
+      if (!is.null(plot_file)) {
+        previous_hooks <- install_plot_hooks()
+        setHook("plot.new", mark_native_plotted, "append")
+        setHook("grid.newpage", mark_native_plotted, "append")
+      }
+
       output_lines <- capture.output(
         {
           withCallingHandlers(
@@ -295,8 +412,29 @@ run_eval <- function(req) {
     }
   )
 
+  # Close the capture device before restoring hooks / reading the PNG.
+  if (!is.null(plot_file)) {
+    while (grDevices::dev.cur() > 1L) {
+      try(grDevices::dev.off(), silent = TRUE)
+    }
+  }
+  if (!is.null(previous_hooks)) {
+    restore_plot_hooks(previous_hooks)
+  }
+
   if (length(output_lines)) {
     .cello_state$logs <- c(.cello_state$logs, output_lines)
+  }
+
+  # Explicit cello.plot() wins; otherwise surface native graphics as an image.
+  if (is.null(.cello_state$plot)) {
+    native <- encode_native_plot(plot_file)
+    if (!is.null(native)) {
+      .cello_state$plot <- native
+    }
+  }
+  if (!is.null(plot_file)) {
+    unlink(plot_file)
   }
 
   plot <- .cello_state$plot
