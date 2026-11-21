@@ -1,5 +1,6 @@
 export type PanelId =
   | 'cells'
+  | 'explain'
   | 'history'
   | 'plot'
   | 'files'
@@ -13,6 +14,15 @@ export type KernelLanguage = 'r' | 'javascript'
 
 export type CellStatus = 'idle' | 'running' | 'ok' | 'error'
 
+/** Feedback on a cell explanation — shaped for later AI audit loops. */
+export interface ExplanationComment {
+  id: string
+  body: string
+  createdAt: number
+  /** `user` from humans; reserve `ai` (or other labels) for agent replies later. */
+  author: 'user' | 'ai' | (string & {})
+}
+
 export interface Cell {
   id: string
   name: string
@@ -22,6 +32,10 @@ export interface Cell {
   lastRunAt?: number
   /** Console stream for this cell only (panel shows selected cell). */
   consoleLines?: string[]
+  /** Markdown purpose doc (focus auditing). Seeded with section template when empty. */
+  explanation: string
+  /** Comments / feedback on the explanation; persist with the workspace. */
+  comments: ExplanationComment[]
 }
 
 export interface HistoryEntry {

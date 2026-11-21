@@ -11,14 +11,15 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - Side ribbon collapsed by default; click a mode to expand (click again / Collapse to return)
 - Plain-text scripts with `# %%` (R) or `// %%` (JS) cell markers
 - Focused cell editor with rename / reorder / run
-- Panels: Cells, History, Plot, Files, Env, Data, Flow (auto Mermaid-style cell graph), Console, Agent — fixed size, no nested scrollbar chrome (Flow grows with the cell / page scroll)
+- Panels: Cells, Explain, History, Plot, Files, Env, Data, Flow (auto Mermaid-style cell graph), Console, Agent — fixed size, no nested scrollbar chrome (Flow grows with the cell / page scroll)
+- **Explain** — per-cell Markdown purpose doc (Purpose / Inputs / Outputs / …) plus feedback comments for focus auditing
 - **R kernel** (local process via Vite dev middleware) plus in-browser JavaScript fallback
 - `cello.plot` / `cello.table` helpers in both languages
 - Native R graphics capture: base `plot()` / printed `ggplot()` appear in Plot (PNG via the R worker)
 - Plot + data panels auto-expand when a cell produces them
-- Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, run, language, prefs stub)
+- Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, Explain cell, run, language, prefs stub)
 - Compact cell nav under the editor: prev/next + Alt+↑/↓ (palette Navigate commands too)
-- Local persistence of the working script
+- Local persistence of the working script (code + explanations + comments in `localStorage`)
 
 ## Develop (with R)
 
@@ -77,6 +78,14 @@ npm run build
 ```
 
 Cell source is normalized (CRLF → LF, strip BOM) before R `parse()`, so Windows line endings in the editor do not break eval.
+
+## Explanations & persistence
+
+Each code cell carries a Markdown **explanation** (seeded with focus-audit headings when empty) and a list of **comments** (`id`, `body`, `createdAt`, `author`). Both persist in `localStorage` under `cello.workspace.v0` on each cell object.
+
+Plain-text script export (`⇩`) remains code-only with `# %%` / `// %%` markers — explanations are **not** embedded in `.R` / `.js` files. Restoring from a full workspace payload keeps docs and comments; importing a bare script reseeds empty explanation templates.
+
+Open **Explain** from the ribbon (`Ex`), the ¶ toolbar icon, or the command palette (“Explain cell” / “Go to Explain”).
 
 
 ## Architecture (short)

@@ -11,6 +11,8 @@ import type { Cell } from '../types.ts'
 function cell(partial: Partial<Cell> & Pick<Cell, 'id' | 'name' | 'code'>): Cell {
   return {
     status: 'idle',
+    explanation: '',
+    comments: [],
     ...partial,
   }
 }

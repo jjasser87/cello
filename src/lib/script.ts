@@ -1,4 +1,5 @@
 import type { Cell, KernelLanguage } from '../types'
+import { emptyExplanationTemplate } from './explanation'
 
 /** Accept both `// %%` (valid JS) and `# %%` (R / Python-style) markers. */
 const CELL_RE = /^(?:\/\/|#)\s*%%\s*(.*)$/
@@ -54,6 +55,10 @@ export function scriptToCells(script: string, existing?: Cell[]): Cell[] {
       status: prev?.status ?? 'idle',
       error: prev?.error,
       lastRunAt: prev?.lastRunAt,
+      // Keep docs/comments when re-parsing the same script order; else seed template.
+      explanation: prev?.explanation ?? emptyExplanationTemplate(),
+      comments: prev?.comments ?? [],
+      consoleLines: prev?.consoleLines,
     }
   })
 }

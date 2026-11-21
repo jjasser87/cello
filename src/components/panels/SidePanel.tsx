@@ -3,9 +3,11 @@ import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { PanelId, ProjectFile } from '../../types'
+import { ExplainPanel } from './ExplainPanel'
 
 const RIBBON_ITEMS: { id: PanelId; label: string; short: string }[] = [
   { id: 'cells', label: 'Cells', short: 'Ce' },
+  { id: 'explain', label: 'Explain', short: 'Ex' },
   { id: 'history', label: 'History', short: 'Hi' },
   { id: 'plot', label: 'Plot', short: 'Pl' },
   { id: 'files', label: 'Files', short: 'Fi' },
@@ -46,6 +48,7 @@ export function SidePanel({ api }: SidePanelProps) {
           <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
           <div className={`side-panel-body${isFlow ? ' is-flow' : ''}`}>
             {state.activePanel === 'cells' && <CellsPanel api={api} />}
+            {state.activePanel === 'explain' && <ExplainPanel api={api} />}
             {state.activePanel === 'history' && <HistoryPanel api={api} />}
             {state.activePanel === 'plot' && <PlotPanel api={api} />}
             {state.activePanel === 'files' && <FilesPanel api={api} />}
@@ -84,6 +87,7 @@ export function SidePanel({ api }: SidePanelProps) {
 function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => void }) {
   const titles: Record<PanelId, { title: string; blurb: string }> = {
     cells: { title: 'Cells', blurb: 'Order determines script flow.' },
+    explain: { title: 'Explain', blurb: 'Purpose doc for this cell.' },
     history: { title: 'History', blurb: 'Runs for the selected cell.' },
     plot: { title: 'Plot', blurb: 'Plot from the selected cell.' },
     files: { title: 'Files', blurb: 'Project tree.' },

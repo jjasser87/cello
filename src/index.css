@@ -31,7 +31,7 @@
   --ribbon-item-size: 36px;
   --ribbon-gap: 0.12rem;
   --ribbon-pad-y: 0.2rem;
-  --ribbon-count: 9;
+  --ribbon-count: 10;
   /* Cell frame tall enough for the full ribbon — no inner ribbon scrollbar. */
   --ribbon-track-min: calc(
     (var(--ribbon-pad-y) * 2) + (var(--ribbon-count) * var(--ribbon-item-size)) +
@@ -251,6 +251,12 @@ code,
 .tool-icon.primary:hover:not(:disabled) {
   background: var(--wood);
   color: #1a1008;
+}
+
+.tool-icon.is-active {
+  color: var(--wood-bright);
+  border-color: rgba(196, 138, 58, 0.45);
+  background: var(--wood-soft);
 }
 
 .tool-lang {
@@ -706,10 +712,184 @@ code,
 .plot-panel,
 .data-panel,
 .ai-panel,
+.explain-panel,
 .file-tree {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+}
+
+.explain-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.explain-mode {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.explain-mode button {
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.explain-mode button.is-active {
+  color: #1a1008;
+  background: linear-gradient(180deg, var(--wood-bright), var(--wood));
+  border-color: var(--wood-deep);
+}
+
+.explain-cell-label {
+  margin-left: auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explain-editor {
+  display: block;
+  width: 100%;
+  min-height: 14rem;
+  resize: vertical;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #050505;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  padding: 0.7rem 0.75rem;
+  overflow: hidden;
+}
+
+.explain-editor:focus {
+  outline: 1px solid rgba(196, 138, 58, 0.45);
+  border-color: rgba(196, 138, 58, 0.35);
+}
+
+.explain-preview {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #050505;
+  padding: 0.7rem 0.85rem;
+  min-height: 10rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+}
+
+.explain-preview .explain-h {
+  margin: 0.85rem 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--wood-bright);
+  letter-spacing: -0.02em;
+}
+
+.explain-preview .explain-h:first-child {
+  margin-top: 0;
+}
+
+.explain-preview .explain-p {
+  margin: 0 0 0.55rem;
+}
+
+.explain-preview .explain-ul {
+  margin: 0 0 0.55rem;
+  padding-left: 1.1rem;
+}
+
+.explain-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--line);
+}
+
+.explain-comments-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.explain-comments-header h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.explain-comments-empty {
+  margin: 0;
+}
+
+.explain-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.explain-comment {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  padding: 0.45rem 0.6rem;
+}
+
+.explain-comment-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.explain-comment-author {
+  color: var(--wood-bright);
+  font-family: var(--font-mono);
+  text-transform: lowercase;
+}
+
+.explain-comment-body {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+}
+
+.explain-compose {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.explain-compose input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #050505;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+.explain-compose input:focus {
+  outline: 1px solid rgba(196, 138, 58, 0.45);
+  border-color: rgba(196, 138, 58, 0.35);
 }
 
 .stack-item {

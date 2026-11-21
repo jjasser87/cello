@@ -6,6 +6,7 @@ import {
   runAllOnRKernel,
 } from '../lib/kernelClient'
 import { createSharedBag, runCellCode, type RunArtifacts } from '../lib/runtime'
+import { createComment, emptyExplanationTemplate } from '../lib/explanation'
 import {
   createId,
   cellsToScript,
@@ -13,7 +14,7 @@ import {
   scriptToCells,
   starterScript,
 } from '../lib/script'
-import { loadWorkspace, saveWorkspace } from '../lib/storage'
+import { hydratePersistedCell, loadWorkspace, saveWorkspace } from '../lib/storage'
 import type {
   Cell,
   HistoryEntry,
@@ -22,6 +23,19 @@ import type {
   ProjectFile,
   WorkspaceState,
 } from '../types'
+
+const PANEL_IDS: PanelId[] = [
+  'cells',
+  'explain',
+  'history',
+  'plot',
+  'files',
+  'env',
+  'data',
+  'structure',
+  'ai',
+  'console',
+]
 
 const DEFAULT_FILES: ProjectFile[] = [
   {
@@ -65,18 +79,19 @@ function buildInitial(): WorkspaceState {
   const language = detectLanguage(saved ?? undefined)
   const cells =
     saved?.cells?.length
-      ? saved.cells.map((cell) => ({
-          ...cell,
-          status: 'idle' as const,
-        }))
+      ? saved.cells.map((cell) => hydratePersistedCell(cell))
       : scriptToCells(starterScript(language))
+
+  const savedPanel = saved?.activePanel
+  const activePanel: PanelId =
+    savedPanel && PANEL_IDS.includes(savedPanel) ? savedPanel : 'cells'
 
   return {
     cells,
     activeCellId: saved?.activeCellId && cells.some((c) => c.id === saved.activeCellId)
       ? saved.activeCellId
       : cells[0].id,
-    activePanel: saved?.activePanel ?? 'cells',
+    activePanel,
     sidePanelOpen: false,
     language,
     kernelStatus: {
@@ -317,6 +332,25 @@ export function useWorkspace() {
     }))
   }, [])
 
+  const updateExplanation = useCallback((cellId: string, explanation: string) => {
+    setState((prev) => ({
+      ...prev,
+      cells: prev.cells.map((cell) => (cell.id === cellId ? { ...cell, explanation } : cell)),
+    }))
+  }, [])
+
+  const addExplanationComment = useCallback((cellId: string, body: string) => {
+    const trimmed = body.trim()
+    if (!trimmed) return
+    const comment = createComment(trimmed, 'user')
+    setState((prev) => ({
+      ...prev,
+      cells: prev.cells.map((cell) =>
+        cell.id === cellId ? { ...cell, comments: [...(cell.comments ?? []), comment] } : cell,
+      ),
+    }))
+  }, [])
+
   const addCell = useCallback((afterId?: string) => {
     setState((prev) => {
       const cell: Cell = {
@@ -324,6 +358,8 @@ export function useWorkspace() {
         name: `Cell ${prev.cells.length + 1}`,
         code: '',
         status: 'idle',
+        explanation: emptyExplanationTemplate(),
+        comments: [],
       }
       const index = afterId
         ? prev.cells.findIndex((item) => item.id === afterId)
@@ -351,6 +387,8 @@ export function useWorkspace() {
                 name: 'Untitled',
                 code: '',
                 status: 'idle' as const,
+                explanation: emptyExplanationTemplate(),
+                comments: [],
               },
             ]
           : remaining
@@ -862,6 +900,8 @@ export function useWorkspace() {
     selectCell,
     updateActiveCode,
     renameCell,
+    updateExplanation,
+    addExplanationComment,
     addCell,
     deleteCell,
     moveCell,
