@@ -43,6 +43,11 @@ export default function App() {
         setPaletteOpen(false)
         return
       }
+      if (id === 'toggle-explain') {
+        api.toggleSidePanel('explain')
+        setPaletteOpen(false)
+        return
+      }
       if (id === 'run') {
         setPaletteOpen(false)
         void api.runCell(activeCell.id)
@@ -222,6 +227,16 @@ export default function App() {
                   aria-label="Reset kernel"
                 >
                   ↺
+                </button>
+                <button
+                  type="button"
+                  className={`tool-icon${state.sidePanelOpen && state.activePanel === 'explain' ? ' is-active' : ''}`}
+                  onClick={() => api.toggleSidePanel('explain')}
+                  title="Explain cell (purpose doc)"
+                  aria-label="Explain cell"
+                  aria-pressed={state.sidePanelOpen && state.activePanel === 'explain'}
+                >
+                  ¶
                 </button>
                 <button
                   type="button"

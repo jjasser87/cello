@@ -5,6 +5,7 @@ export type CommandId =
   | `panel:${PanelId}`
   | 'prev-cell'
   | 'next-cell'
+  | 'toggle-explain'
   | 'run'
   | 'run-all'
   | 'reset'
@@ -25,6 +26,7 @@ const PANEL_COMMANDS: { id: PanelId; label: string }[] = [
   { id: 'env', label: 'Env' },
   { id: 'structure', label: 'Flow' },
   { id: 'cells', label: 'Cells' },
+  { id: 'explain', label: 'Explain' },
   { id: 'history', label: 'History' },
   { id: 'files', label: 'Files' },
   { id: 'ai', label: 'Agent' },
@@ -49,6 +51,12 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
       id: 'next-cell',
       label: 'Next cell',
       hint: 'Alt+↓',
+      group: 'Navigate',
+    },
+    {
+      id: 'toggle-explain',
+      label: 'Explain cell',
+      hint: 'Purpose doc',
       group: 'Navigate',
     },
     ...panels,
