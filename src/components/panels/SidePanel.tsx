@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { PanelId, ProjectFile } from '../../types'
+import type { PanelId } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
 import { FilesPanel } from './FilesPanel'
 

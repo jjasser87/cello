@@ -99,6 +99,8 @@ function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName())
     activePlotId: null,
     tables: [],
     activeTableId: null,
+    consoleEntries: [],
+    activeConsoleId: null,
     env: [],
     consoleLines: ['Ready. Run a cell with ⌘/Ctrl+Enter.'],
     files: defaultProjectFiles(name, language),
