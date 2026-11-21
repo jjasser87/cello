@@ -27,6 +27,13 @@ import {
   scriptToCells,
   starterScript,
 } from '../lib/script'
+import { packageRunOutputs } from '../lib/runArtifacts'
+import {
+  restoreCellCode,
+  sourceCodeForConsole,
+  sourceCodeForPlot,
+  sourceCodeForTable,
+} from '../lib/panelRestore'
 import { loadWorkspace, saveWorkspace } from '../lib/storage'
 import type {
   Cell,
@@ -60,6 +67,8 @@ function buildFromProject(
     activePlotId: null,
     tables: [],
     activeTableId: null,
+    consoleEntries: [],
+    activeConsoleId: null,
     env: [],
     consoleLines: extras?.consoleLines ?? ['Ready. Run a cell with ⌘/Ctrl+Enter.'],
     files: project.files,
@@ -115,29 +124,18 @@ function applyRunToState(
   },
 ): WorkspaceState {
   const { cellId, cellName, code, previousCode, result } = args
-  const historyEntry: HistoryEntry = {
-    id: createId('hist'),
-    cellId,
-    cellName,
-    code,
-    previousCode,
-    timestamp: Date.now(),
-    status: result.error ? 'error' : 'ok',
-    error: result.error,
-    outputText: result.logs.join('\n'),
-    plotId: result.plot?.id,
-    dataId: result.table?.id,
-  }
+  const packaged = packageRunOutputs({ cellId, cellName, code, previousCode, result })
 
-  const plots = result.plot ? [...prev.plots, result.plot] : prev.plots
-  const tables = result.table ? [...prev.tables, result.table] : prev.tables
-  const history = [...prev.history, historyEntry]
+  const plots = packaged.plot ? [...prev.plots, packaged.plot] : prev.plots
+  const tables = packaged.table ? [...prev.tables, packaged.table] : prev.tables
+  const consoleEntries = [...prev.consoleEntries, packaged.consoleEntry]
+  const history = [...prev.history, packaged.historyEntry]
   let activePanel = prev.activePanel
   let sidePanelOpen = prev.sidePanelOpen
-  if (result.plot) {
+  if (packaged.plot) {
     activePanel = 'plot'
     sidePanelOpen = true
-  } else if (result.table) {
+  } else if (packaged.table) {
     activePanel = 'data'
     sidePanelOpen = true
   } else if (result.error) {
@@ -145,15 +143,13 @@ function applyRunToState(
     sidePanelOpen = true
   }
 
-  const cellConsoleChunk = result.logs.length
-    ? result.logs
-    : [result.error ? `Error: ${result.error}` : '(no output)']
+  const cellConsoleChunk = packaged.consoleEntry.text.split('\n')
   const cellPlotId =
-    result.plot?.id ??
+    packaged.plot?.id ??
     [...plots].reverse().find((plot) => plot.cellId === cellId)?.id ??
     null
   const cellTableId =
-    result.table?.id ??
+    packaged.table?.id ??
     [...tables].reverse().find((table) => table.cellId === cellId)?.id ??
     null
 
@@ -176,6 +172,8 @@ function applyRunToState(
     activePlotId: cellPlotId,
     tables,
     activeTableId: cellTableId,
+    consoleEntries,
+    activeConsoleId: packaged.consoleEntry.id,
     env: result.env,
     consoleLines: [
       ...prev.consoleLines,
@@ -209,6 +207,8 @@ export function useWorkspace() {
       activePlotId: null,
       tables: [] as WorkspaceState['tables'],
       activeTableId: null,
+      consoleEntries: [] as WorkspaceState['consoleEntries'],
+      activeConsoleId: null,
       env: [] as WorkspaceState['env'],
       consoleLines: [] as string[],
       files: state.files,
@@ -307,6 +307,7 @@ export function useWorkspace() {
     setState((prev) => {
       const cellPlots = prev.plots.filter((plot) => plot.cellId === cellId)
       const cellTables = prev.tables.filter((table) => table.cellId === cellId)
+      const cellConsole = prev.consoleEntries.filter((entry) => entry.cellId === cellId)
       const cellHistory = prev.history.filter((entry) => entry.cellId === cellId)
       const latestHistory = cellHistory[cellHistory.length - 1]
       return {
@@ -316,6 +317,7 @@ export function useWorkspace() {
         sidePanelOpen: panel ? true : prev.sidePanelOpen,
         activePlotId: cellPlots[cellPlots.length - 1]?.id ?? null,
         activeTableId: cellTables[cellTables.length - 1]?.id ?? null,
+        activeConsoleId: cellConsole[cellConsole.length - 1]?.id ?? null,
         historyIndex: latestHistory
           ? prev.history.findIndex((entry) => entry.id === latestHistory.id)
           : -1,
@@ -409,7 +411,28 @@ export function useWorkspace() {
       const history = prev.history.filter((entry) => entry.cellId !== cellId)
       const historyIndex =
         history.length === 0 ? -1 : Math.min(prev.historyIndex, history.length - 1)
-      return { ...prev, cells, activeCellId, history, historyIndex }
+      const plots = prev.plots.filter((plot) => plot.cellId !== cellId)
+      const tables = prev.tables.filter((table) => table.cellId !== cellId)
+      const consoleEntries = prev.consoleEntries.filter((entry) => entry.cellId !== cellId)
+      return {
+        ...prev,
+        cells,
+        activeCellId,
+        history,
+        historyIndex,
+        plots,
+        tables,
+        consoleEntries,
+        activePlotId: plots.find((plot) => plot.cellId === activeCellId)?.id
+          ?? plots[plots.length - 1]?.id
+          ?? null,
+        activeTableId: tables.find((table) => table.cellId === activeCellId)?.id
+          ?? tables[tables.length - 1]?.id
+          ?? null,
+        activeConsoleId: consoleEntries.find((entry) => entry.cellId === activeCellId)?.id
+          ?? consoleEntries[consoleEntries.length - 1]?.id
+          ?? null,
+      }
     })
   }, [])
 
@@ -441,9 +464,11 @@ export function useWorkspace() {
         historyIndex: -1,
         plots: [],
         tables: [],
+        consoleEntries: [],
         env: [],
         activePlotId: null,
         activeTableId: null,
+        activeConsoleId: null,
         consoleLines: [
           ...prev.consoleLines,
           language === 'r'
@@ -657,11 +682,13 @@ export function useWorkspace() {
           let historyCursor = [...priorHistory]
           const plots = [...prev.plots]
           const tables = [...prev.tables]
+          const consoleEntries = [...prev.consoleEntries]
           const consoleExtra: string[] = []
           const statusById = new Map<
             string,
             { status: Cell['status']; error?: string; env: RunArtifacts['env'] }
           >()
+          let lastConsoleId: string | null = null
 
           results.forEach((result, index) => {
             const cell = cells[index]
@@ -669,33 +696,24 @@ export function useWorkspace() {
             const previousEntry = [...historyCursor]
               .reverse()
               .find((entry) => entry.cellId === cell.id)
-            const historyEntry: HistoryEntry = {
-              id: createId('hist'),
+            const packaged = packageRunOutputs({
               cellId: cell.id,
               cellName: cell.name,
               code: cell.code,
               previousCode: previousEntry?.code ?? '',
-              timestamp: Date.now(),
-              status: result.error ? 'error' : 'ok',
-              error: result.error,
-              outputText: result.logs.join('\n'),
-              plotId: result.plot?.id,
-              dataId: result.table?.id,
-            }
-            historyCursor = [...historyCursor, historyEntry]
-            if (result.plot) plots.push(result.plot)
-            if (result.table) tables.push(result.table)
+              result,
+            })
+            historyCursor = [...historyCursor, packaged.historyEntry]
+            if (packaged.plot) plots.push(packaged.plot)
+            if (packaged.table) tables.push(packaged.table)
+            consoleEntries.push(packaged.consoleEntry)
+            lastConsoleId = packaged.consoleEntry.id
             statusById.set(cell.id, {
               status: result.error ? 'error' : 'ok',
               error: result.error,
               env: result.env,
             })
-            consoleExtra.push(
-              `▸ ${cell.name}`,
-              ...(result.logs.length
-                ? result.logs
-                : [result.error ? `Error: ${result.error}` : '(no output)']),
-            )
+            consoleExtra.push(`▸ ${cell.name}`, packaged.consoleEntry.text)
           })
 
           const last = results[results.length - 1]
@@ -719,14 +737,19 @@ export function useWorkspace() {
           const lastCellTables = lastCellId
             ? tables.filter((table) => table.cellId === lastCellId)
             : []
+          const lastCellConsole = lastCellId
+            ? consoleEntries.filter((entry) => entry.cellId === lastCellId)
+            : []
 
           return {
             ...prev,
             env: last?.env ?? [],
             plots,
             tables,
+            consoleEntries,
             activePlotId: lastCellPlots[lastCellPlots.length - 1]?.id ?? null,
             activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
+            activeConsoleId: lastCellConsole[lastCellConsole.length - 1]?.id ?? lastConsoleId,
             history: historyCursor,
             historyIndex: historyCursor.length - 1,
             consoleLines: [
@@ -770,6 +793,7 @@ export function useWorkspace() {
           historyEntry: HistoryEntry
           plot?: NonNullable<RunArtifacts['plot']>
           table?: NonNullable<RunArtifacts['table']>
+          consoleEntry: ReturnType<typeof packageRunOutputs>['consoleEntry']
           env: RunArtifacts['env']
           logs: string[]
         }
@@ -783,27 +807,22 @@ export function useWorkspace() {
             .reverse()
             .find((entry) => entry.cellId === cell.id)
           const result = runCellCode(cell.code, shared, { cellId: cell.id })
-          const historyEntry: HistoryEntry = {
-            id: createId('hist'),
+          const packaged = packageRunOutputs({
             cellId: cell.id,
             cellName: cell.name,
             code: cell.code,
             previousCode: previousEntry?.code ?? '',
-            timestamp: Date.now(),
-            status: result.error ? 'error' : 'ok',
-            error: result.error,
-            outputText: result.logs.join('\n'),
-            plotId: result.plot?.id,
-            dataId: result.table?.id,
-          }
-          historyCursor = [...historyCursor, historyEntry]
+            result,
+          })
+          historyCursor = [...historyCursor, packaged.historyEntry]
           batches.push({
             cellId: cell.id,
             status: result.error ? 'error' : 'ok',
             error: result.error,
-            historyEntry,
-            plot: result.plot ?? undefined,
-            table: result.table ?? undefined,
+            historyEntry: packaged.historyEntry,
+            plot: packaged.plot ?? undefined,
+            table: packaged.table ?? undefined,
+            consoleEntry: packaged.consoleEntry,
             env: result.env,
             logs: result.logs,
           })
@@ -822,6 +841,10 @@ export function useWorkspace() {
           const tables = [
             ...prev.tables,
             ...batches.flatMap((batch) => (batch.table ? [batch.table] : [])),
+          ]
+          const consoleEntries = [
+            ...prev.consoleEntries,
+            ...batches.map((batch) => batch.consoleEntry),
           ]
           const last = batches[batches.length - 1]
           let activePanel = prev.activePanel
@@ -844,12 +867,7 @@ export function useWorkspace() {
               : 'Kernel reset. Running all cells in order…',
             ...batches.flatMap((batch) => {
               const cell = prev.cells.find((item) => item.id === batch.cellId)
-              return [
-                `▸ ${cell?.name ?? batch.cellId}`,
-                ...(batch.logs.length
-                  ? batch.logs
-                  : [batch.error ? `Error: ${batch.error}` : '(no output)']),
-              ]
+              return [`▸ ${cell?.name ?? batch.cellId}`, batch.consoleEntry.text]
             }),
           ].slice(-200)
 
@@ -862,14 +880,19 @@ export function useWorkspace() {
           const lastCellTables = lastCellId
             ? tables.filter((table) => table.cellId === lastCellId)
             : []
+          const lastCellConsole = lastCellId
+            ? consoleEntries.filter((entry) => entry.cellId === lastCellId)
+            : []
 
           return {
             ...prev,
             env: last?.env ?? [],
             plots,
             tables,
+            consoleEntries,
             activePlotId: lastCellPlots[lastCellPlots.length - 1]?.id ?? null,
             activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
+            activeConsoleId: lastCellConsole[lastCellConsole.length - 1]?.id ?? null,
             history,
             historyIndex: history.length - 1,
             consoleLines,
@@ -930,8 +953,10 @@ export function useWorkspace() {
       env: [],
       plots: [],
       tables: [],
+      consoleEntries: [],
       activePlotId: null,
       activeTableId: null,
+      activeConsoleId: null,
       consoleLines: ['Kernel cleared.'],
       cells: prev.cells.map((cell) => ({
         ...cell,
@@ -942,27 +967,27 @@ export function useWorkspace() {
     }))
   }, [])
 
+  /** Browse code history — restores the cell source for that run. */
   const setHistoryIndex = useCallback((index: number) => {
     setState((prev) => {
       if (index < 0 || index >= prev.history.length) return prev
       const entry = prev.history[index]
       const cellExists = prev.cells.some((cell) => cell.id === entry.cellId)
-      // Prefer this run's plot/data so Plot/Data panels match History revisit;
-      // fall back to the latest artifact for the entry's cell when the run had none.
-      const cellPlotId =
-        entry.plotId ??
-        [...prev.plots].reverse().find((plot) => plot.cellId === entry.cellId)?.id ??
-        null
-      const cellTableId =
-        entry.dataId ??
-        [...prev.tables].reverse().find((table) => table.cellId === entry.cellId)?.id ??
-        null
+      if (!cellExists) {
+        return {
+          ...prev,
+          historyIndex: index,
+          consoleLines: [
+            ...prev.consoleLines,
+            `warn: cannot restore — cell "${entry.cellName}" no longer exists`,
+          ].slice(-200),
+        }
+      }
       return {
         ...prev,
         historyIndex: index,
-        activeCellId: cellExists ? entry.cellId : prev.activeCellId,
-        activePlotId: cellPlotId,
-        activeTableId: cellTableId,
+        activeCellId: entry.cellId,
+        cells: restoreCellCode(prev.cells, entry.cellId, entry.code),
       }
     })
   }, [])
@@ -983,14 +1008,65 @@ export function useWorkspace() {
       }
       return {
         ...prev,
-        cells: prev.cells.map((cell) =>
-          cell.id === entry.cellId
-            ? { ...cell, code: entry.code, status: 'idle', error: undefined }
-            : cell,
-        ),
+        cells: restoreCellCode(prev.cells, entry.cellId, entry.code),
         activeCellId: entry.cellId,
-        activePanel: 'cells',
-        sidePanelOpen: true,
+      }
+    })
+  }, [])
+
+  /** Browse prior plots — restores the cell source that produced the plot. */
+  const setActivePlotId = useCallback((plotId: string) => {
+    setState((prev) => {
+      const plot = prev.plots.find((item) => item.id === plotId)
+      if (!plot) return prev
+      const source = sourceCodeForPlot(plot, prev.history)
+      const historyIndex = plot.historyId
+        ? prev.history.findIndex((entry) => entry.id === plot.historyId)
+        : prev.history.findIndex((entry) => entry.plotId === plot.id)
+      return {
+        ...prev,
+        activePlotId: plotId,
+        activeCellId: plot.cellId,
+        cells: source ? restoreCellCode(prev.cells, plot.cellId, source) : prev.cells,
+        historyIndex: historyIndex >= 0 ? historyIndex : prev.historyIndex,
+      }
+    })
+  }, [])
+
+  /** Browse prior tables — restores the cell source that produced the table. */
+  const setActiveTableId = useCallback((tableId: string) => {
+    setState((prev) => {
+      const table = prev.tables.find((item) => item.id === tableId)
+      if (!table) return prev
+      const source = sourceCodeForTable(table, prev.history)
+      const historyIndex = table.historyId
+        ? prev.history.findIndex((entry) => entry.id === table.historyId)
+        : prev.history.findIndex((entry) => entry.dataId === table.id)
+      return {
+        ...prev,
+        activeTableId: tableId,
+        activeCellId: table.cellId,
+        cells: source ? restoreCellCode(prev.cells, table.cellId, source) : prev.cells,
+        historyIndex: historyIndex >= 0 ? historyIndex : prev.historyIndex,
+      }
+    })
+  }, [])
+
+  /** Browse prior console runs — restores the cell source for that run. */
+  const setActiveConsoleId = useCallback((consoleId: string) => {
+    setState((prev) => {
+      const entry = prev.consoleEntries.find((item) => item.id === consoleId)
+      if (!entry) return prev
+      const source = sourceCodeForConsole(entry, prev.history)
+      const historyIndex = entry.historyId
+        ? prev.history.findIndex((item) => item.id === entry.historyId)
+        : -1
+      return {
+        ...prev,
+        activeConsoleId: consoleId,
+        activeCellId: entry.cellId,
+        cells: source ? restoreCellCode(prev.cells, entry.cellId, source) : prev.cells,
+        historyIndex: historyIndex >= 0 ? historyIndex : prev.historyIndex,
       }
     })
   }, [])
@@ -1013,9 +1089,11 @@ export function useWorkspace() {
       historyIndex: -1,
       plots: [],
       tables: [],
+      consoleEntries: [],
       env: [],
       activePlotId: null,
       activeTableId: null,
+      activeConsoleId: null,
       consoleLines: [
         `Imported script with ${language === 'r' ? '# %%' : '// %%'} cell markers.`,
       ],
@@ -1093,6 +1171,9 @@ export function useWorkspace() {
     resetKernel,
     setHistoryIndex,
     restoreHistoryCode,
+    setActivePlotId,
+    setActiveTableId,
+    setActiveConsoleId,
     exportScript,
     importScript,
   }

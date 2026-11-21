@@ -1,13 +1,8 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
-import {
-  historyArtifactLabel,
-  resolveHistoryArtifacts,
-  type HistoryArtifactKind,
-} from '../../lib/historyArtifacts'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { DataTable, PanelId, PlotSpec, ProjectFile } from '../../types'
+import type { PanelId, ProjectFile } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
 import { FilesPanel } from './FilesPanel'
 
@@ -94,13 +89,13 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
   const titles: Record<PanelId, { title: string; blurb: string }> = {
     cells: { title: 'Cells', blurb: 'Order determines script flow.' },
     explain: { title: 'Explain', blurb: 'Purpose doc for this cell.' },
-    history: { title: 'History', blurb: 'Prior console, plots, and data for this cell.' },
-    plot: { title: 'Plot', blurb: 'Plot from the selected cell.' },
-    files: { title: 'Files', blurb: 'Project file structure.' },
+    history: { title: 'History', blurb: 'Prior cell source for this cell.' },
+    plot: { title: 'Plot', blurb: 'Prior plots for the selected cell.' },
+    files: { title: 'Files', blurb: 'Project tree.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
-    data: { title: 'Data', blurb: 'Table from the selected cell.' },
+    data: { title: 'Data', blurb: 'Prior tables for the selected cell.' },
     structure: { title: 'Script flow', blurb: 'Auto graph of how cells connect.' },
-    console: { title: 'Console', blurb: 'Output for the selected cell.' },
+    console: { title: 'Console', blurb: 'Prior runs for the selected cell.' },
     ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
   const copy = titles[panel]
@@ -161,12 +156,10 @@ function CellsPanel({ api }: SidePanelProps) {
 }
 
 function HistoryPanel({ api }: SidePanelProps) {
-  const { state, setHistoryIndex, restoreHistoryCode } = api
+  const { state, setHistoryIndex } = api
   const cellHistory = state.history.filter((entry) => entry.cellId === state.activeCellId)
   if (cellHistory.length === 0) {
-    return (
-      <EmptyState text="No history for this cell yet. Run it to retain console, plots, and data." />
-    )
+    return <EmptyState text="No code history for this cell yet. Run it to keep prior source." />
   }
   const current =
     state.historyIndex >= 0 ? state.history[state.historyIndex] : undefined
@@ -176,7 +169,6 @@ function HistoryPanel({ api }: SidePanelProps) {
     if (match >= 0) localIndex = match
   }
   const entry = cellHistory[localIndex]
-  const artifacts = resolveHistoryArtifacts(entry, state.plots, state.tables)
   const lines = diffLines(entry.previousCode, entry.code)
   const goToLocal = (nextLocal: number) => {
     const target = cellHistory[nextLocal]
@@ -192,37 +184,38 @@ function HistoryPanel({ api }: SidePanelProps) {
           type="button"
           onClick={() => goToLocal(localIndex - 1)}
           disabled={localIndex <= 0}
-          aria-label="Previous run"
+          aria-label="Previous code version"
         >
           ←
         </button>
         <div>
           <strong>{entry.cellName}</strong>
           <div className="muted">
-            Run {localIndex + 1} / {cellHistory.length} ·{' '}
+            Code {localIndex + 1} / {cellHistory.length} ·{' '}
             {new Date(entry.timestamp).toLocaleTimeString()}
             {entry.status === 'error' ? ' · error' : ''}
           </div>
-          <HistoryBadges kinds={artifacts.kinds} />
+          <p className="muted small history-restore-hint">
+            Selecting a version restores that source into the cell.
+          </p>
         </div>
         <button
           type="button"
           onClick={() => goToLocal(localIndex + 1)}
           disabled={localIndex >= cellHistory.length - 1}
-          aria-label="Next run"
+          aria-label="Next code version"
         >
           →
         </button>
       </div>
 
       {cellHistory.length > 1 ? (
-        <ul className="history-run-list" aria-label="Runs for this cell">
+        <ul className="panel-run-list" aria-label="Code versions for this cell">
           {cellHistory
             .slice()
             .reverse()
             .map((item, reverseIndex) => {
               const itemLocal = cellHistory.length - 1 - reverseIndex
-              const itemArtifacts = resolveHistoryArtifacts(item, state.plots, state.tables)
               return (
                 <li key={item.id}>
                   <button
@@ -230,7 +223,7 @@ function HistoryPanel({ api }: SidePanelProps) {
                     className={item.id === entry.id ? 'is-active' : ''}
                     onClick={() => goToLocal(itemLocal)}
                   >
-                    <span className="history-run-meta">
+                    <span className="panel-run-meta">
                       <span className="mono">#{itemLocal + 1}</span>
                       <span className="muted">
                         {new Date(item.timestamp).toLocaleTimeString()}
@@ -239,39 +232,15 @@ function HistoryPanel({ api }: SidePanelProps) {
                         <span className="history-run-error">err</span>
                       ) : null}
                     </span>
-                    <HistoryBadges kinds={itemArtifacts.kinds} />
+                    <span className="muted small panel-run-preview">
+                      {item.code.trim().split('\n')[0]?.slice(0, 42) || '(empty)'}
+                    </span>
                   </button>
                 </li>
               )
             })}
         </ul>
       ) : null}
-
-      <div className="history-artifacts" aria-label="Retained outputs for this run">
-        <HistoryArtifactBlock title="Console">
-          {artifacts.consoleText ? (
-            <pre className="output-block">{artifacts.consoleText}</pre>
-          ) : (
-            <p className="muted small">No console output from this run.</p>
-          )}
-        </HistoryArtifactBlock>
-
-        <HistoryArtifactBlock title="Plot">
-          {artifacts.plot ? (
-            <HistoryPlotPreview plot={artifacts.plot} />
-          ) : (
-            <p className="muted small">No plot from this run.</p>
-          )}
-        </HistoryArtifactBlock>
-
-        <HistoryArtifactBlock title="Data">
-          {artifacts.table ? (
-            <HistoryTablePreview table={artifacts.table} />
-          ) : (
-            <p className="muted small">No table from this run.</p>
-          )}
-        </HistoryArtifactBlock>
-      </div>
 
       {entry.error ? <div className="cell-error">Error: {entry.error}</div> : null}
 
@@ -289,7 +258,7 @@ function HistoryPanel({ api }: SidePanelProps) {
           </pre>
         </div>
         <div className="diff-pane">
-          <div className="diff-label">This run</div>
+          <div className="diff-label">This version</div>
           <pre>
             {lines.map((line, i) =>
               line.type === 'remove' ? null : (
@@ -301,110 +270,12 @@ function HistoryPanel({ api }: SidePanelProps) {
           </pre>
         </div>
       </div>
-
-      <button
-        type="button"
-        className="primary wide"
-        onClick={restoreHistoryCode}
-        disabled={!state.cells.some((cell) => cell.id === entry.cellId)}
-        title={
-          state.cells.some((cell) => cell.id === entry.cellId)
-            ? 'Restore this code into the cell'
-            : 'Cell no longer exists'
-        }
-      >
-        Restore this code into the cell
-      </button>
-    </div>
-  )
-}
-
-function HistoryBadges({ kinds }: { kinds: HistoryArtifactKind[] }) {
-  if (kinds.length === 0) {
-    return <div className="history-badges muted small">No retained outputs</div>
-  }
-  return (
-    <div className="history-badges" aria-label="Retained outputs">
-      {kinds.map((kind) => (
-        <span key={kind} className={`history-badge history-badge-${kind}`}>
-          {historyArtifactLabel(kind)}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function HistoryArtifactBlock({
-  title,
-  children,
-}: {
-  title: string
-  children: ReactNode
-}) {
-  return (
-    <section className="history-artifact-block">
-      <h3>{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-function HistoryPlotPreview({ plot }: { plot: PlotSpec }) {
-  return (
-    <div className="history-plot-preview">
-      <div className="plot-title-row">
-        <h4>{plot.title}</h4>
-        <span className="muted">{plot.kind}</span>
-      </div>
-      {plot.kind === 'image' && plot.imageData ? (
-        <img className="plot-image" src={plot.imageData} alt={plot.title} />
-      ) : plot.kind === 'line' ? (
-        <LineChart plot={plot} />
-      ) : (
-        <BarChart plot={plot} />
-      )}
-    </div>
-  )
-}
-
-function HistoryTablePreview({ table }: { table: DataTable }) {
-  const previewRows = table.rows.slice(0, 12)
-  const hidden = table.rows.length - previewRows.length
-  return (
-    <div className="history-table-preview">
-      <div className="plot-title-row">
-        <h4>{table.name}</h4>
-        <span className="muted">
-          {table.rows.length} rows · {table.columns.length} cols
-        </span>
-      </div>
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {table.columns.map((col) => (
-                <th key={col}>{col}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {previewRows.map((row, index) => (
-              <tr key={index}>
-                {table.columns.map((col) => (
-                  <td key={col}>{formatCell(row[col])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {hidden > 0 ? <p className="muted small">+{hidden} more rows in Data</p> : null}
     </div>
   )
 }
 
 function PlotPanel({ api }: SidePanelProps) {
-  const { state } = api
+  const { state, setActivePlotId } = api
   const cellPlots = state.plots.filter((item) => item.cellId === state.activeCellId)
   const plot =
     cellPlots.find((item) => item.id === state.activePlotId) ??
@@ -416,12 +287,45 @@ function PlotPanel({ api }: SidePanelProps) {
     )
   }
 
+  const localIndex = cellPlots.findIndex((item) => item.id === plot.id)
+
   return (
     <div className="plot-panel">
-      <div className="plot-title-row">
-        <h3>{plot.title}</h3>
-        <span className="muted">{plot.kind}</span>
+      <div className="history-nav">
+        <button
+          type="button"
+          onClick={() => {
+            const prev = cellPlots[localIndex - 1]
+            if (prev) setActivePlotId(prev.id)
+          }}
+          disabled={localIndex <= 0}
+          aria-label="Previous plot"
+        >
+          ←
+        </button>
+        <div>
+          <strong>{plot.title}</strong>
+          <div className="muted">
+            Plot {localIndex + 1} / {cellPlots.length} ·{' '}
+            {new Date(plot.createdAt).toLocaleTimeString()}
+          </div>
+          <p className="muted small history-restore-hint">
+            Selecting a plot restores the code that produced it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = cellPlots[localIndex + 1]
+            if (next) setActivePlotId(next.id)
+          }}
+          disabled={localIndex >= cellPlots.length - 1}
+          aria-label="Next plot"
+        >
+          →
+        </button>
       </div>
+
       {plot.kind === 'image' && plot.imageData ? (
         <img className="plot-image" src={plot.imageData} alt={plot.title} />
       ) : plot.kind === 'line' ? (
@@ -429,16 +333,30 @@ function PlotPanel({ api }: SidePanelProps) {
       ) : (
         <BarChart plot={plot} />
       )}
+
       {cellPlots.length > 1 ? (
-        <ul className="plot-list">
+        <ul className="panel-run-list" aria-label="Plots for this cell">
           {cellPlots
             .slice()
             .reverse()
-            .map((item) => (
-              <li key={item.id} className={item.id === plot.id ? 'is-active' : ''}>
-                {item.title}
-              </li>
-            ))}
+            .map((item, reverseIndex) => {
+              const itemLocal = cellPlots.length - 1 - reverseIndex
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={item.id === plot.id ? 'is-active' : ''}
+                    onClick={() => setActivePlotId(item.id)}
+                  >
+                    <span className="panel-run-meta">
+                      <span className="mono">#{itemLocal + 1}</span>
+                      <span>{item.title}</span>
+                    </span>
+                    <span className="muted small">{item.kind}</span>
+                  </button>
+                </li>
+              )
+            })}
         </ul>
       ) : null}
     </div>
@@ -558,7 +476,7 @@ function EnvPanel({ api }: SidePanelProps) {
 }
 
 function DataPanel({ api }: SidePanelProps) {
-  const { state } = api
+  const { state, setActiveTableId } = api
   const cellTables = state.tables.filter((item) => item.cellId === state.activeCellId)
   const table =
     cellTables.find((item) => item.id === state.activeTableId) ??
@@ -570,14 +488,73 @@ function DataPanel({ api }: SidePanelProps) {
     )
   }
 
+  const localIndex = cellTables.findIndex((item) => item.id === table.id)
+
   return (
     <div className="data-panel">
-      <div className="plot-title-row">
-        <h3>{table.name}</h3>
-        <span className="muted">
-          {table.rows.length} rows · {table.columns.length} cols
-        </span>
+      <div className="history-nav">
+        <button
+          type="button"
+          onClick={() => {
+            const prev = cellTables[localIndex - 1]
+            if (prev) setActiveTableId(prev.id)
+          }}
+          disabled={localIndex <= 0}
+          aria-label="Previous table"
+        >
+          ←
+        </button>
+        <div>
+          <strong>{table.name}</strong>
+          <div className="muted">
+            Table {localIndex + 1} / {cellTables.length} · {table.rows.length} rows ·{' '}
+            {table.columns.length} cols · {new Date(table.createdAt).toLocaleTimeString()}
+          </div>
+          <p className="muted small history-restore-hint">
+            Selecting a table restores the code that produced it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = cellTables[localIndex + 1]
+            if (next) setActiveTableId(next.id)
+          }}
+          disabled={localIndex >= cellTables.length - 1}
+          aria-label="Next table"
+        >
+          →
+        </button>
       </div>
+
+      {cellTables.length > 1 ? (
+        <ul className="panel-run-list" aria-label="Tables for this cell">
+          {cellTables
+            .slice()
+            .reverse()
+            .map((item, reverseIndex) => {
+              const itemLocal = cellTables.length - 1 - reverseIndex
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={item.id === table.id ? 'is-active' : ''}
+                    onClick={() => setActiveTableId(item.id)}
+                  >
+                    <span className="panel-run-meta">
+                      <span className="mono">#{itemLocal + 1}</span>
+                      <span>{item.name}</span>
+                    </span>
+                    <span className="muted small">
+                      {item.rows.length}×{item.columns.length}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+        </ul>
+      ) : null}
+
       <div className="table-scroll">
         <table className="data-table">
           <thead>
@@ -708,13 +685,90 @@ function AiPanel({ api }: SidePanelProps) {
 }
 
 function ConsolePanel({ api }: SidePanelProps) {
-  const lines = api.activeCell.consoleLines ?? []
-  if (lines.length === 0) {
+  const { state, setActiveConsoleId } = api
+  const cellRuns = state.consoleEntries.filter((entry) => entry.cellId === state.activeCellId)
+  const entry =
+    cellRuns.find((item) => item.id === state.activeConsoleId) ??
+    cellRuns[cellRuns.length - 1]
+
+  if (!entry) {
     return <EmptyState text="No console output for this cell. Run it to capture kernel output." />
   }
+
+  const localIndex = cellRuns.findIndex((item) => item.id === entry.id)
+
   return (
     <div className="console-panel">
-      <pre className="console-full">{lines.join('\n')}</pre>
+      <div className="history-nav">
+        <button
+          type="button"
+          onClick={() => {
+            const prev = cellRuns[localIndex - 1]
+            if (prev) setActiveConsoleId(prev.id)
+          }}
+          disabled={localIndex <= 0}
+          aria-label="Previous console run"
+        >
+          ←
+        </button>
+        <div>
+          <strong>Console run</strong>
+          <div className="muted">
+            Run {localIndex + 1} / {cellRuns.length} ·{' '}
+            {new Date(entry.timestamp).toLocaleTimeString()}
+            {entry.status === 'error' ? ' · error' : ''}
+          </div>
+          <p className="muted small history-restore-hint">
+            Selecting a run restores the code that produced it.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const next = cellRuns[localIndex + 1]
+            if (next) setActiveConsoleId(next.id)
+          }}
+          disabled={localIndex >= cellRuns.length - 1}
+          aria-label="Next console run"
+        >
+          →
+        </button>
+      </div>
+
+      {cellRuns.length > 1 ? (
+        <ul className="panel-run-list" aria-label="Console runs for this cell">
+          {cellRuns
+            .slice()
+            .reverse()
+            .map((item, reverseIndex) => {
+              const itemLocal = cellRuns.length - 1 - reverseIndex
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={item.id === entry.id ? 'is-active' : ''}
+                    onClick={() => setActiveConsoleId(item.id)}
+                  >
+                    <span className="panel-run-meta">
+                      <span className="mono">#{itemLocal + 1}</span>
+                      <span className="muted">
+                        {new Date(item.timestamp).toLocaleTimeString()}
+                      </span>
+                      {item.status === 'error' ? (
+                        <span className="history-run-error">err</span>
+                      ) : null}
+                    </span>
+                    <span className="muted small panel-run-preview">
+                      {item.text.trim().split('\n')[0]?.slice(0, 42) || '(no output)'}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+        </ul>
+      ) : null}
+
+      <pre className="console-full">{entry.text}</pre>
     </div>
   )
 }

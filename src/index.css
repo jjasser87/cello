@@ -1145,39 +1145,11 @@ code,
   align-items: flex-start;
 }
 
-.history-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin-top: 0.3rem;
+.history-restore-hint {
+  margin: 0.25rem 0 0;
 }
 
-.history-badge {
-  font-size: 0.68rem;
-  letter-spacing: 0.02em;
-  padding: 0.12rem 0.4rem;
-  border-radius: 4px;
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.history-badge-console {
-  border-color: rgba(201, 162, 94, 0.35);
-  color: var(--wood-bright);
-}
-
-.history-badge-plot {
-  border-color: rgba(201, 162, 94, 0.45);
-  color: var(--wood);
-}
-
-.history-badge-data {
-  border-color: rgba(201, 162, 94, 0.55);
-  color: var(--ink);
-}
-
-.history-run-list {
+.panel-run-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1186,7 +1158,7 @@ code,
   gap: 0.25rem;
 }
 
-.history-run-list button {
+.panel-run-list button {
   width: 100%;
   display: flex;
   align-items: center;
@@ -1201,55 +1173,34 @@ code,
   cursor: pointer;
 }
 
-.history-run-list button:hover {
+.panel-run-list button:hover {
   background: rgba(255, 255, 255, 0.03);
   border-color: var(--line);
 }
 
-.history-run-list button.is-active {
+.panel-run-list button.is-active {
   border-color: rgba(201, 162, 94, 0.45);
   background: var(--wood-glow);
 }
 
-.history-run-meta {
+.panel-run-meta {
   display: inline-flex;
   align-items: baseline;
   gap: 0.45rem;
+  min-width: 0;
+}
+
+.panel-run-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
 }
 
 .history-run-error {
   color: var(--danger);
   font-size: 0.68rem;
   text-transform: uppercase;
-}
-
-.history-artifacts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.history-artifact-block h3 {
-  margin: 0 0 0.35rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.history-artifact-block h4 {
-  margin: 0;
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  color: var(--ink);
-}
-
-.history-plot-preview,
-.history-table-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
 }
 
 .diff-grid {
