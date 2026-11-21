@@ -966,11 +966,125 @@ code,
   color: var(--ink);
 }
 
+.structure-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+}
+
 .structure-file {
   padding: 0.5rem 0.65rem;
   border-radius: 8px;
   background: var(--bg-code);
   border: 1px solid var(--line);
+}
+
+.flow-graph {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  min-height: 0;
+}
+
+.flow-canvas {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    radial-gradient(420px 180px at 10% 0%, rgba(196, 138, 58, 0.07), transparent 60%),
+    var(--bg-code);
+  padding: 0.35rem 0.15rem;
+}
+
+.flow-svg {
+  display: block;
+  max-width: 100%;
+}
+
+.flow-node-shape {
+  fill: var(--bg-elevated);
+  stroke: var(--line-strong);
+  stroke-width: 1.25;
+  cursor: pointer;
+  transition: fill var(--panel-duration) var(--panel-ease), stroke var(--panel-duration)
+    var(--panel-ease);
+}
+
+.flow-node.is-current .flow-node-shape {
+  fill: var(--wood-soft);
+  stroke: var(--wood);
+  stroke-width: 1.75;
+}
+
+.flow-node:focus-within .flow-node-shape,
+.flow-node-shape:hover {
+  stroke: var(--wood-bright);
+}
+
+.flow-node-label {
+  fill: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.flow-node.is-current .flow-node-label {
+  fill: var(--ink);
+  font-weight: 560;
+}
+
+.flow-edge-order {
+  stroke: rgba(242, 235, 227, 0.35);
+  stroke-width: 1.5;
+}
+
+.flow-edge-depends {
+  stroke: rgba(196, 138, 58, 0.55);
+  stroke-width: 1.25;
+  stroke-dasharray: 4 3;
+}
+
+.flow-arrow-head {
+  fill: rgba(242, 235, 227, 0.45);
+}
+
+.flow-arrow-head-dep {
+  fill: rgba(196, 138, 58, 0.7);
+}
+
+.flow-edge-label {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  pointer-events: none;
+}
+
+.flow-mermaid-source {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  padding: 0.35rem 0.55rem;
+}
+
+.flow-mermaid-source summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  user-select: none;
+}
+
+.flow-mermaid-source pre {
+  margin: 0.45rem 0 0.2rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: 6px;
+  background: var(--bg-code);
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .ai-thread {
