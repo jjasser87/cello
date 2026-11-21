@@ -1,7 +1,9 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { CellEditor } from './components/CellEditor'
+import { CommandPalette, type CommandId } from './components/CommandPalette'
 import { SidePanel } from './components/panels/SidePanel'
 import { useWorkspace } from './hooks/useWorkspace'
+import type { PanelId } from './types'
 
 export default function App() {
   const api = useWorkspace()
@@ -9,10 +11,52 @@ export default function App() {
   const activeIndex = state.cells.findIndex((cell) => cell.id === activeCell.id)
   const index = Math.max(0, activeIndex)
   const total = state.cells.length
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  const closePalette = useCallback(() => setPaletteOpen(false), [])
+
+  const runPaletteCommand = useCallback(
+    (id: CommandId) => {
+      if (id.startsWith('panel:')) {
+        const panel = id.slice('panel:'.length) as PanelId
+        api.setPanel(panel)
+        setPaletteOpen(false)
+        return
+      }
+      if (id === 'run') {
+        setPaletteOpen(false)
+        void api.runCell(activeCell.id)
+        return
+      }
+      if (id === 'run-all') {
+        setPaletteOpen(false)
+        void api.runAll()
+        return
+      }
+      if (id === 'reset') {
+        setPaletteOpen(false)
+        void api.resetKernel()
+        return
+      }
+      if (id === 'toggle-language') {
+        api.setLanguage(state.language === 'r' ? 'javascript' : 'r')
+        setPaletteOpen(false)
+        return
+      }
+    },
+    [api, activeCell.id, state.language],
+  )
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.key !== 'Enter') return
+      const mod = event.metaKey || event.ctrlKey
+      if (mod && event.shiftKey && (event.key === 'p' || event.key === 'P')) {
+        event.preventDefault()
+        setPaletteOpen((open) => !open)
+        return
+      }
+
+      if (!(mod) || event.key !== 'Enter') return
       // CellEditor already handles this shortcut inside the textarea.
       const target = event.target
       if (
@@ -140,6 +184,15 @@ export default function App() {
                 <button
                   type="button"
                   className="tool-icon"
+                  onClick={() => setPaletteOpen(true)}
+                  title="Command palette (⌘/Ctrl+Shift+P)"
+                  aria-label="Open command palette"
+                >
+                  ⌘
+                </button>
+                <button
+                  type="button"
+                  className="tool-icon"
                   onClick={exportScript}
                   title="Export script"
                   aria-label="Export script"
@@ -152,6 +205,14 @@ export default function App() {
           />
         </div>
       </div>
+
+      {paletteOpen ? (
+        <CommandPalette
+          language={state.language}
+          onClose={closePalette}
+          onRun={runPaletteCommand}
+        />
+      ) : null}
     </div>
   )
 }
