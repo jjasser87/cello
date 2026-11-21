@@ -15,8 +15,9 @@
     "test:project-file": "node --experimental-strip-types --test src/lib/projectFile.test.ts",
     "test:r-completions": "node --experimental-strip-types --test src/lib/rCompletions.test.ts",
     "test:highlight": "node --experimental-strip-types --test src/lib/highlight.test.ts",
+    "test:panel-restore": "node --experimental-strip-types --test src/lib/panelRestore.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore"
   },
   "dependencies": {
     "react": "^19.3.1",

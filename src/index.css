@@ -1142,6 +1142,65 @@ code,
 
 .history-nav {
   justify-content: space-between;
+  align-items: flex-start;
+}
+
+.history-restore-hint {
+  margin: 0.25rem 0 0;
+}
+
+.panel-run-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.panel-run-list button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  text-align: left;
+  padding: 0.4rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.panel-run-list button:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--line);
+}
+
+.panel-run-list button.is-active {
+  border-color: rgba(201, 162, 94, 0.45);
+  background: var(--wood-glow);
+}
+
+.panel-run-meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.panel-run-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
+
+.history-run-error {
+  color: var(--danger);
+  font-size: 0.68rem;
+  text-transform: uppercase;
 }
 
 .diff-grid {

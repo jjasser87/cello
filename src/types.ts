@@ -38,6 +38,7 @@ export interface Cell {
   comments: ExplanationComment[]
 }
 
+/** Code-history entry: prior cell source for a run (History panel). */
 export interface HistoryEntry {
   id: string
   cellId: string
@@ -47,9 +48,11 @@ export interface HistoryEntry {
   timestamp: number
   status: 'ok' | 'error'
   error?: string
+  /** Linked outputs live in Plot / Console / Data panels, not History. */
   outputText?: string
   plotId?: string
   dataId?: string
+  consoleId?: string
 }
 
 export interface PlotSpec {
@@ -62,6 +65,9 @@ export interface PlotSpec {
   /** data:image/png;base64,… for native R graphics (base plot / ggplot). */
   imageData?: string
   createdAt: number
+  /** Cell source that produced this plot — restored when browsing Plot history. */
+  sourceCode?: string
+  historyId?: string
 }
 
 export interface DataTable {
@@ -71,6 +77,20 @@ export interface DataTable {
   columns: string[]
   rows: Record<string, string | number | boolean | null>[]
   createdAt: number
+  /** Cell source that produced this table — restored when browsing Data history. */
+  sourceCode?: string
+  historyId?: string
+}
+
+/** Per-run console snapshot for the Console panel (not History). */
+export interface ConsoleEntry {
+  id: string
+  cellId: string
+  text: string
+  timestamp: number
+  status: 'ok' | 'error'
+  sourceCode: string
+  historyId?: string
 }
 
 export interface EnvBinding {
@@ -111,6 +131,8 @@ export interface WorkspaceState {
   activePlotId: string | null
   tables: DataTable[]
   activeTableId: string | null
+  consoleEntries: ConsoleEntry[]
+  activeConsoleId: string | null
   env: EnvBinding[]
   consoleLines: string[]
   /** Project file tree shown in the Files ribbon panel. */
