@@ -160,7 +160,7 @@ class RKernelProcess {
     if (!rscript) {
       this.unavailableReason = this.rscriptOverride
         ? `R path not found: ${this.rscriptOverride}. Check Settings → R path.`
-        : 'R is not installed. Install R (r-base) and restart `npm run dev`, or set Settings → R path.'
+        : 'R is not installed. Install R (r-base) and restart the app, or set Settings → R path.'
       throw new Error(this.unavailableReason)
     }
 
@@ -378,109 +378,131 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
   res.end(payload)
 }
 
-export function rKernelPlugin(): Plugin {
+/**
+ * Shared R kernel session for Vite middleware and the Electron main process.
+ * Same `/api/kernel/*` JSON contracts in both hosts.
+ */
+export type KernelSession = {
+  ensureStarted: () => Promise<void>
+  stop: () => void
+  status: () => ReturnType<RKernelProcess['status']>
+  /**
+   * Handle a `/api/kernel*` request. Returns true when handled
+   * (caller must not call `next` / continue).
+   */
+  handleApi: (req: IncomingMessage, res: ServerResponse) => Promise<boolean>
+}
+
+export function createKernelSession(): KernelSession {
   const kernel = new RKernelProcess()
+
+  return {
+    ensureStarted: () => kernel.ensureStarted(),
+    stop: () => kernel.stop(),
+    status: () => kernel.status(),
+    async handleApi(req, res) {
+      const url = req.url?.split('?')[0] ?? ''
+      if (!url.startsWith('/api/kernel')) return false
+
+      try {
+        if (req.method === 'GET' && url === '/api/kernel/status') {
+          if (!kernel.status().available && !kernel.status().message) {
+            try {
+              await kernel.ensureStarted()
+            } catch {
+              /* reported below */
+            }
+          }
+          sendJson(res, 200, kernel.status())
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/config') {
+          const body = (await readJson(req)) as { rscriptPath?: string | null }
+          const raw = body.rscriptPath
+          const pathValue = raw === null || raw === undefined ? null : String(raw)
+          const status = await kernel.configure(pathValue)
+          sendJson(res, 200, status)
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/eval') {
+          const body = (await readJson(req)) as { code?: string; cellId?: string }
+          const result = await kernel.eval(String(body.code ?? ''), String(body.cellId ?? ''))
+          sendJson(res, 200, result)
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/reset') {
+          const result = await kernel.reset()
+          sendJson(res, 200, result)
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/run-all') {
+          const body = (await readJson(req)) as {
+            cells?: { id: string; code: string }[]
+          }
+          const cells = Array.isArray(body.cells) ? body.cells : []
+          const result = await kernel.runAll(
+            cells.map((cell) => ({
+              id: String(cell.id),
+              code: normalizeRSource(String(cell.code ?? '')),
+            })),
+          )
+          sendJson(res, 200, result)
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/complete') {
+          const body = (await readJson(req)) as { code?: string; cursor?: number }
+          const code = String(body.code ?? '')
+          const cursor =
+            typeof body.cursor === 'number' && Number.isFinite(body.cursor)
+              ? Math.max(0, Math.floor(body.cursor))
+              : normalizeRSource(code).length
+          try {
+            const result = await kernel.complete(code, cursor)
+            sendJson(res, 200, result)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            sendJson(res, 200, {
+              items: [],
+              prefix: '',
+              error: message,
+              ...kernel.status(),
+            })
+          }
+          return true
+        }
+
+        sendJson(res, 404, { error: 'not found' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        sendJson(res, 503, { error: message, ...kernel.status() })
+      }
+      return true
+    },
+  }
+}
+
+export function rKernelPlugin(): Plugin {
+  const session = createKernelSession()
 
   return {
     name: 'cello-r-kernel',
     configureServer(server) {
       // Probe availability in the background so the first Run is warm when R works.
-      void kernel.ensureStarted().catch(() => {
+      void session.ensureStarted().catch(() => {
         /* status endpoint surfaces the reason */
       })
 
       server.middlewares.use(async (req, res, next) => {
-        const url = req.url?.split('?')[0] ?? ''
-        if (!url.startsWith('/api/kernel')) {
-          next()
-          return
-        }
-
-        try {
-          if (req.method === 'GET' && url === '/api/kernel/status') {
-            // Attempt a soft start so the UI learns availability without a separate action.
-            if (!kernel.status().available && !kernel.status().message) {
-              try {
-                await kernel.ensureStarted()
-              } catch {
-                /* reported below */
-              }
-            }
-            sendJson(res, 200, kernel.status())
-            return
-          }
-
-          if (req.method === 'POST' && url === '/api/kernel/config') {
-            const body = (await readJson(req)) as { rscriptPath?: string | null }
-            const raw = body.rscriptPath
-            const pathValue =
-              raw === null || raw === undefined
-                ? null
-                : String(raw)
-            const status = await kernel.configure(pathValue)
-            sendJson(res, 200, status)
-            return
-          }
-
-          if (req.method === 'POST' && url === '/api/kernel/eval') {
-            const body = (await readJson(req)) as { code?: string; cellId?: string }
-            const result = await kernel.eval(String(body.code ?? ''), String(body.cellId ?? ''))
-            sendJson(res, 200, result)
-            return
-          }
-
-          if (req.method === 'POST' && url === '/api/kernel/reset') {
-            const result = await kernel.reset()
-            sendJson(res, 200, result)
-            return
-          }
-
-          if (req.method === 'POST' && url === '/api/kernel/run-all') {
-            const body = (await readJson(req)) as {
-              cells?: { id: string; code: string }[]
-            }
-            const cells = Array.isArray(body.cells) ? body.cells : []
-            const result = await kernel.runAll(
-              cells.map((cell) => ({
-                id: String(cell.id),
-                code: normalizeRSource(String(cell.code ?? '')),
-              })),
-            )
-            sendJson(res, 200, result)
-            return
-          }
-
-          if (req.method === 'POST' && url === '/api/kernel/complete') {
-            const body = (await readJson(req)) as { code?: string; cursor?: number }
-            const code = String(body.code ?? '')
-            const cursor =
-              typeof body.cursor === 'number' && Number.isFinite(body.cursor)
-                ? Math.max(0, Math.floor(body.cursor))
-                : normalizeRSource(code).length
-            try {
-              const result = await kernel.complete(code, cursor)
-              sendJson(res, 200, result)
-            } catch (err) {
-              // Soft-fail: editor keeps working; empty list + reason.
-              const message = err instanceof Error ? err.message : String(err)
-              sendJson(res, 200, {
-                items: [],
-                prefix: '',
-                error: message,
-                ...kernel.status(),
-              })
-            }
-            return
-          }
-
-          sendJson(res, 404, { error: 'not found' })
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err)
-          sendJson(res, 503, { error: message, ...kernel.status() })
-        }
+        const handled = await session.handleApi(req, res)
+        if (!handled) next()
       })
 
-      const exit = () => kernel.stop()
+      const exit = () => session.stop()
       process.once('exit', exit)
       process.once('SIGINT', exit)
       process.once('SIGTERM', exit)
