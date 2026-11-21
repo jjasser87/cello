@@ -20,12 +20,16 @@ suppressPackageStartupMessages(library(jsonlite, quietly = TRUE))
 .cello_state$plot <- NULL
 .cello_state$table <- NULL
 .cello_state$native_plotted <- FALSE
+.cello_state$last_visible <- NULL
+# Cap Data-panel payloads so large frames stay responsive.
+.CELLO_MAX_TABLE_ROWS <- 250L
 
 clear_artifacts <- function() {
   .cello_state$logs <- character(0)
   .cello_state$plot <- NULL
   .cello_state$table <- NULL
   .cello_state$native_plotted <- FALSE
+  .cello_state$last_visible <- NULL
 }
 
 append_log <- function(...) {
@@ -97,16 +101,132 @@ cello <- list(
       as.character(name)[1]
     }
     assign(table_name, rows, envir = .GlobalEnv)
-
-    normalized <- normalize_rows(rows)
-    .cello_state$table <- list(
-      name = table_name,
-      columns = as.list(normalized$columns),
-      rows = normalized$rows
-    )
+    set_table_artifact(rows, table_name)
     invisible(.cello_state$table)
   }
 )
+
+is_tabular <- function(value) {
+  if (is.null(value)) return(FALSE)
+  # data.frame covers tibbles / data.table; matrices are rectangular too.
+  is.data.frame(value) || is.matrix(value)
+}
+
+tabular_fingerprint <- function(value) {
+  list(
+    nrow = as.integer(nrow(value))[1],
+    ncol = as.integer(ncol(value))[1],
+    class = paste(class(value), collapse = "/")
+  )
+}
+
+snapshot_tabular_env <- function() {
+  out <- list()
+  for (name in user_names()) {
+    value <- tryCatch(
+      get(name, envir = .GlobalEnv, inherits = FALSE),
+      error = function(e) NULL
+    )
+    if (is_tabular(value)) {
+      out[[name]] <- tabular_fingerprint(value)
+    }
+  }
+  out
+}
+
+# Prefer the last `name <- …` assignment that matches candidates.
+# Bare `=` is ignored — it is usually a named argument (data.frame, list, …).
+pick_tabular_name <- function(code, candidates) {
+  candidates <- as.character(candidates)
+  candidates <- candidates[nzchar(candidates)]
+  if (length(candidates) == 0L) return(NULL)
+  if (length(candidates) == 1L) return(candidates[[1]])
+
+  last_hit <- NULL
+  for (name in candidates) {
+    # Word-boundary-ish: start or non-name char before the symbol.
+    pattern <- paste0("(^|[^A-Za-z0-9._])", name, "\\s*<-")
+    hits <- gregexpr(pattern, code, perl = TRUE)[[1]]
+    if (!identical(hits[[1]], -1L)) {
+      pos <- max(hits)
+      if (is.null(last_hit) || pos >= last_hit$pos) {
+        last_hit <- list(name = name, pos = pos)
+      }
+    }
+  }
+  if (!is.null(last_hit)) return(last_hit$name)
+  # Fallback: last candidate in sorted order (stable, deterministic).
+  sort(candidates)[[length(candidates)]]
+}
+
+set_table_artifact <- function(value, name = "data") {
+  table_name <- if (is.null(name) || !nzchar(as.character(name)[1])) {
+    "data"
+  } else {
+    as.character(name)[1]
+  }
+  normalized <- normalize_rows(value)
+  .cello_state$table <- list(
+    name = table_name,
+    columns = as.list(normalized$columns),
+    rows = normalized$rows
+  )
+  invisible(.cello_state$table)
+}
+
+# Capture data.frame / tibble / matrix results without an explicit cello.table().
+# Explicit cello.table() always wins (caller checks .cello_state$table is NULL).
+capture_native_table <- function(code, visible_value, before_tabular) {
+  if (!is.null(visible_value) && is_tabular(visible_value)) {
+    # Prefer a GlobalEnv binding that is identical to the visible value.
+    match_name <- NULL
+    for (name in user_names()) {
+      value <- tryCatch(
+        get(name, envir = .GlobalEnv, inherits = FALSE),
+        error = function(e) NULL
+      )
+      if (!is.null(value) && identical(value, visible_value)) {
+        match_name <- name
+        break
+      }
+    }
+    set_table_artifact(visible_value, if (is.null(match_name)) "result" else match_name)
+    return(invisible(TRUE))
+  }
+
+  after <- snapshot_tabular_env()
+  changed <- character(0)
+  for (name in names(after)) {
+    prev <- before_tabular[[name]]
+    if (is.null(prev) || !identical(prev, after[[name]])) {
+      changed <- c(changed, name)
+    }
+  }
+
+  # Include tabular bindings assigned with `<-` in this cell even when the
+  # fingerprint is unchanged, so re-running a create/load cell still opens Data.
+  assigned <- character(0)
+  for (name in names(after)) {
+    pattern <- paste0("(^|[^A-Za-z0-9._])", name, "\\s*<-")
+    hits <- gregexpr(pattern, code, perl = TRUE)[[1]]
+    if (!identical(hits[[1]], -1L)) {
+      assigned <- c(assigned, name)
+    }
+  }
+
+  candidates <- unique(c(changed, assigned))
+  if (length(candidates) == 0L) return(invisible(FALSE))
+
+  chosen <- pick_tabular_name(code, candidates)
+  if (is.null(chosen)) return(invisible(FALSE))
+  value <- tryCatch(
+    get(chosen, envir = .GlobalEnv, inherits = FALSE),
+    error = function(e) NULL
+  )
+  if (!is_tabular(value)) return(invisible(FALSE))
+  set_table_artifact(value, chosen)
+  invisible(TRUE)
+}
 
 normalize_rows <- function(input) {
   if (is.null(input)) {
@@ -116,7 +236,10 @@ normalize_rows <- function(input) {
   if (is.data.frame(input)) {
     columns <- names(input)
     if (is.null(columns)) columns <- character(0)
-    rows <- lapply(seq_len(nrow(input)), function(i) {
+    n <- nrow(input)
+    if (is.null(n) || is.na(n)) n <- 0L
+    take <- seq_len(min(n, .CELLO_MAX_TABLE_ROWS))
+    rows <- lapply(take, function(i) {
       row <- list()
       for (col in columns) {
         row[[col]] <- scalarize(input[[col]][[i]])
@@ -129,7 +252,10 @@ normalize_rows <- function(input) {
   if (is.matrix(input)) {
     columns <- colnames(input)
     if (is.null(columns)) columns <- paste0("V", seq_len(ncol(input)))
-    rows <- lapply(seq_len(nrow(input)), function(i) {
+    n <- nrow(input)
+    if (is.null(n) || is.na(n)) n <- 0L
+    take <- seq_len(min(n, .CELLO_MAX_TABLE_ROWS))
+    rows <- lapply(take, function(i) {
       row <- list()
       for (j in seq_along(columns)) {
         row[[columns[[j]]]] <- scalarize(input[i, j])
@@ -142,7 +268,8 @@ normalize_rows <- function(input) {
   if (is.list(input) && length(input) > 0 && is.list(input[[1]]) && !is.data.frame(input[[1]])) {
     columns <- unique(unlist(lapply(input, names)))
     if (is.null(columns)) columns <- character(0)
-    rows <- lapply(input, function(item) {
+    take <- seq_len(min(length(input), .CELLO_MAX_TABLE_ROWS))
+    rows <- lapply(input[take], function(item) {
       row <- list()
       for (col in columns) {
         row[[col]] <- scalarize(item[[col]])
@@ -154,6 +281,9 @@ normalize_rows <- function(input) {
 
   if (is.atomic(input) || is.list(input)) {
     vals <- as.list(input)
+    if (length(vals) > .CELLO_MAX_TABLE_ROWS) {
+      vals <- vals[seq_len(.CELLO_MAX_TABLE_ROWS)]
+    }
     rows <- lapply(vals, function(v) list(value = scalarize(v)))
     return(list(columns = "value", rows = rows))
   }
@@ -593,6 +723,7 @@ run_eval <- function(req) {
   output_lines <- character(0)
   plot_file <- NULL
   previous_hooks <- NULL
+  before_tabular <- snapshot_tabular_env()
 
   tryCatch(
     {
@@ -610,6 +741,8 @@ run_eval <- function(req) {
               expr <- parse(text = code, encoding = "UTF-8")
               result <- withVisible(eval(expr, envir = .GlobalEnv, enclos = .GlobalEnv))
               if (isTRUE(result$visible)) {
+                # Keep off .GlobalEnv — <<- would leak a user binding.
+                .cello_state$last_visible <- result$value
                 print(result$value)
               }
             },
@@ -654,6 +787,14 @@ run_eval <- function(req) {
   }
   if (!is.null(plot_file)) {
     unlink(plot_file)
+  }
+
+  # Explicit cello.table() wins; otherwise auto-capture data.frame / tibble / matrix.
+  if (is.null(.cello_state$table) && is.null(err)) {
+    tryCatch(
+      capture_native_table(code, .cello_state$last_visible, before_tabular),
+      error = function(e) invisible(FALSE)
+    )
   }
 
   plot <- .cello_state$plot

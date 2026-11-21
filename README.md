@@ -16,6 +16,7 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - **R kernel** (local process via Vite dev middleware) plus in-browser JavaScript fallback
 - `cello.plot` / `cello.table` helpers in both languages
 - Native R graphics capture: base `plot()` / printed `ggplot()` appear in Plot (PNG via the R worker)
+- Native R table capture: `data.frame` / tibble / `matrix` results (and `cello.table`) appear in Data for that cell
 - Plot + data panels auto-expand when a cell produces them
 - Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, Explain cell, run, language, prefs stub)
 - Compact cell nav under the editor: prev/next + Alt+↑/↓ (palette Navigate commands too)
@@ -58,7 +59,14 @@ library(ggplot2)
 ggplot(data.frame(x = 1:5, y = c(2, 4, 3, 5, 4)), aes(x, y)) + geom_line()
 ```
 
-If R was built without PNG (or the PNG device cannot open), the cell still runs and Console notes that native plot capture is unavailable. Structured `cello.plot` keeps working either way. Explicit `cello.plot(...)` in a cell wins over a native image from the same cell.
+Native tables (no helper required) fill Data when a cell creates or returns a rectangular object:
+
+```r
+sales <- data.frame(month = c("Jan", "Feb"), revenue = c(42, 51))
+# or: as.matrix(sales) / tibble::tibble(...) / read.csv(...)
+```
+
+If R was built without PNG (or the PNG device cannot open), the cell still runs and Console notes that native plot capture is unavailable. Structured `cello.plot` keeps working either way. Explicit `cello.plot(...)` / `cello.table(...)` in a cell win over native capture from the same cell.
 
 API used by the UI (dev server only):
 
@@ -110,5 +118,6 @@ Open **Explain** from the ribbon (`Ex`), the ¶ toolbar icon, or the command pal
 - `server/rKernelHost.ts` (Vite plugin) owns one `Rscript` child running `kernel/r/worker.R`.
 - The worker keeps a shared `.GlobalEnv`, streams printed output into Console, and returns Env / Plot / Data payloads as JSON.
 - During each eval the worker opens a temporary PNG device (cairo when available) and, if `plot.new` / `grid.newpage` fire, returns `kind: "image"` with a `data:image/png;base64,…` payload for the Plot panel.
+- After each eval, if `cello.table` was not called, the worker auto-captures a visible or newly assigned `data.frame` / tibble / `matrix` into the Data payload for that cell.
 
 See the project note at `docs/r-kernel-v1.md` in the Cello agent store for the v1 plan and deferred items.
