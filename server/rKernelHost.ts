@@ -7,7 +7,10 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Plugin } from 'vite'
 import { findRscript } from './findRscript.ts'
 import {
+  normalizeCompletions,
   normalizeResult,
+  type KernelCompleteResult,
+  type KernelCompletionItem,
   type KernelEnvBinding,
   type KernelPlotPayload,
   type KernelRunResult,
@@ -17,12 +20,14 @@ import { normalizeRSource } from './normalizeRSource.ts'
 
 export type KernelLanguage = 'r' | 'javascript'
 export type {
+  KernelCompleteResult,
+  KernelCompletionItem,
   KernelEnvBinding,
   KernelPlotPayload,
   KernelRunResult,
   KernelTablePayload,
 }
-export { normalizeResult }
+export { normalizeCompletions, normalizeResult }
 
 interface Pending {
   resolve: (value: Record<string, unknown>) => void
@@ -34,6 +39,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const WORKER = path.join(ROOT, 'kernel', 'r', 'worker.R')
 const LIB_DIR = path.join(ROOT, 'kernel', 'r', '.lib')
 const REQUEST_TIMEOUT_MS = 60_000
+const COMPLETE_TIMEOUT_MS = 5_000
 
 function createId(): string {
   return `req_${Math.random().toString(36).slice(2, 10)}`
@@ -233,7 +239,10 @@ class RKernelProcess {
     pending.resolve(msg)
   }
 
-  private send(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
+  private send(
+    payload: Record<string, unknown>,
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ): Promise<Record<string, unknown>> {
     if (!this.child) {
       return Promise.reject(new Error('R kernel is not running'))
     }
@@ -244,7 +253,7 @@ class RKernelProcess {
       const timer = setTimeout(() => {
         this.pending.delete(id)
         reject(new Error('R kernel request timed out'))
-      }, REQUEST_TIMEOUT_MS)
+      }, timeoutMs)
       this.pending.set(id, { resolve, reject, timer })
       // UTF-8 bytes only — avoid locale-dependent stdin encoding on Windows.
       const line = Buffer.from(`${JSON.stringify(payload)}\n`, 'utf8')
@@ -267,6 +276,20 @@ class RKernelProcess {
     await this.ensureStarted()
     const msg = await this.send({ op: 'reset', id: createId() })
     return normalizeResult(msg)
+  }
+
+  async complete(code: string, cursor: number): Promise<KernelCompleteResult> {
+    await this.ensureStarted()
+    const msg = await this.send(
+      {
+        op: 'complete',
+        id: createId(),
+        code: normalizeRSource(code),
+        cursor,
+      },
+      COMPLETE_TIMEOUT_MS,
+    )
+    return normalizeCompletions(msg)
   }
 
   async runAll(
@@ -371,6 +394,29 @@ export function rKernelPlugin(): Plugin {
               })),
             )
             sendJson(res, 200, result)
+            return
+          }
+
+          if (req.method === 'POST' && url === '/api/kernel/complete') {
+            const body = (await readJson(req)) as { code?: string; cursor?: number }
+            const code = String(body.code ?? '')
+            const cursor =
+              typeof body.cursor === 'number' && Number.isFinite(body.cursor)
+                ? Math.max(0, Math.floor(body.cursor))
+                : normalizeRSource(code).length
+            try {
+              const result = await kernel.complete(code, cursor)
+              sendJson(res, 200, result)
+            } catch (err) {
+              // Soft-fail: editor keeps working; empty list + reason.
+              const message = err instanceof Error ? err.message : String(err)
+              sendJson(res, 200, {
+                items: [],
+                prefix: '',
+                error: message,
+                ...kernel.status(),
+              })
+            }
             return
           }
 

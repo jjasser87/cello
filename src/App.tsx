@@ -131,6 +131,7 @@ export default function App() {
             index={index}
             total={total}
             language={state.language}
+            env={state.env}
             kernelHint={
               state.language === 'r'
                 ? state.kernelStatus.available

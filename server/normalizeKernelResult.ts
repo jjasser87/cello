@@ -29,6 +29,44 @@ export interface KernelRunResult {
   error?: string
 }
 
+export interface KernelCompletionItem {
+  label: string
+  kind: string
+}
+
+export interface KernelCompleteResult {
+  items: KernelCompletionItem[]
+  prefix: string
+  error?: string
+}
+
+/** Normalize an NDJSON worker completions payload. */
+export function normalizeCompletions(msg: Record<string, unknown>): KernelCompleteResult {
+  const prefix = typeof msg.prefix === 'string' ? msg.prefix : ''
+  const rawItems = Array.isArray(msg.items) ? msg.items : []
+  const items: KernelCompletionItem[] = []
+  for (const item of rawItems) {
+    if (typeof item === 'string' && item.trim()) {
+      items.push({ label: item, kind: 'symbol' })
+      continue
+    }
+    if (item && typeof item === 'object') {
+      const row = item as Record<string, unknown>
+      const label = typeof row.label === 'string' ? row.label : ''
+      if (!label.trim()) continue
+      items.push({
+        label,
+        kind: typeof row.kind === 'string' && row.kind.trim() ? row.kind : 'symbol',
+      })
+    }
+  }
+  return {
+    items,
+    prefix,
+    error: typeof msg.error === 'string' && msg.error.trim() ? msg.error.trim() : undefined,
+  }
+}
+
 /** Normalize an NDJSON worker result into the host API shape. */
 export function normalizeResult(msg: Record<string, unknown>): KernelRunResult {
   const logs = Array.isArray(msg.logs)
