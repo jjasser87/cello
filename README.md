@@ -106,33 +106,44 @@ npm run desktop:app
 
 npm 12+ blocks dependency install scripts unless they are listed in `package.json` `allowScripts`. Cello commits approvals for **electron** (required — downloads the desktop binary) and **esbuild** (used by Vite/tsx). With that field present, a normal `npm install` should run Electron’s postinstall.
 
-If you still see a warning that `electron` / `esbuild` scripts are not covered, or `npm run desktop` fails with **Electron failed to install correctly**, approve once and repair:
+`npm run desktop:install` (also hooked as `predesktop`) repairs a missing binary: it clears `ELECTRON_SKIP_BINARY_DOWNLOAD` for the child, re-runs `electron/install.js`, and on Windows falls back to re-extracting the cached zip with PowerShell `Expand-Archive` when extract-zip leaves `electron.exe` / `path.txt` missing.
 
-```bash
-# npm 12+: write name-only approvals (any version)
-npm install-scripts approve --no-allow-scripts-pin electron esbuild
-# alias: npm approve-scripts --no-allow-scripts-pin electron esbuild
-```
+If you still see allowScripts warnings, or `desktop:install` / `npm run desktop` fails, use the recovery steps below.
 
-**PowerShell (Windows)** — if the binary is already missing:
+**PowerShell (Windows):**
 
 ```powershell
+Remove-Item Env:ELECTRON_SKIP_BINARY_DOWNLOAD -ErrorAction SilentlyContinue
 npm install-scripts approve --no-allow-scripts-pin electron esbuild
-Remove-Item -Recurse -Force node_modules\electron
+Remove-Item -Recurse -Force node_modules\electron -ErrorAction SilentlyContinue
 npm install
+npm run desktop:install
 npm run desktop
 ```
+
+If `desktop:install` still reports a missing binary, extract the cached zip manually:
+
+```powershell
+$zip = Get-ChildItem -Recurse "$env:LOCALAPPDATA\electron\Cache\electron-v*-win32-*.zip" |
+  Sort-Object LastWriteTime -Descending | Select-Object -First 1
+New-Item -ItemType Directory -Force node_modules\electron\dist | Out-Null
+Expand-Archive -LiteralPath $zip.FullName -DestinationPath node_modules\electron\dist -Force
+Set-Content -Path node_modules\electron\path.txt -Value 'electron.exe' -NoNewline
+npm run desktop
+```
+
+If GitHub releases are blocked, set a mirror first: `$env:ELECTRON_MIRROR = "https://npmmirror.com/mirrors/electron/"`.
 
 **bash / zsh:**
 
 ```bash
+unset ELECTRON_SKIP_BINARY_DOWNLOAD
 npm install-scripts approve --no-allow-scripts-pin electron esbuild
 rm -rf node_modules/electron
 npm install
+npm run desktop:install
 npm run desktop
 ```
-
-Or, without deleting: `npm run desktop:install` (re-runs `electron/install.js`) / `npm rebuild electron` after approving.
 
 Installers / auto-update are not in this slice yet.
 
