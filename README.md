@@ -23,7 +23,7 @@ Cello is a minimalist, cell-based development environment. The main window stays
 
 ## Develop (with R)
 
-1. Install R (`r-base` / R.app / etc.) so `Rscript` is on your `PATH`.
+1. Install R (`r-base` / R.app / etc.) so `Rscript` is on your `PATH` (or set a custom path under **Settings…** in the command palette, or export `CELLO_RSCRIPT`).
 2. From the repo:
 
 ```bash
@@ -61,10 +61,12 @@ If R was built without PNG (or the PNG device cannot open), the cell still runs 
 
 API used by the UI (dev server only):
 
-- `GET /api/kernel/status`
+- `GET /api/kernel/status` (includes `rscriptPath` / `rscriptOverride` when known)
+- `POST /api/kernel/config` `{ "rscriptPath": "/path/to/Rscript" | null }` — Settings override; restarts the worker
 - `POST /api/kernel/eval` `{ "code", "cellId" }`
 - `POST /api/kernel/reset`
 - `POST /api/kernel/run-all` `{ "cells": [{ "id", "code" }] }`
+- `POST /api/kernel/complete` `{ "code", "cursor" }`
 
 ## Develop (JS-only fallback)
 

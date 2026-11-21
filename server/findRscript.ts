@@ -7,6 +7,16 @@ export type FindRscriptOptions = {
   /** Override platform. Defaults to process.platform. */
   platform?: NodeJS.Platform
   /**
+   * Explicit path to an Rscript binary. When set (non-empty), only this path
+   * is considered — no PATH / Program Files fallback on miss.
+   */
+  override?: string | null
+  /**
+   * When true (default), honor `CELLO_RSCRIPT` from `env` if `override` is empty.
+   * Same no-fallback rule as `override` when the env value is set.
+   */
+  honorEnv?: boolean
+  /**
    * Injected existence check for tests. Defaults to fs.access with execute
    * bit on POSIX and existence on Windows.
    */
@@ -74,7 +84,8 @@ function pathApi(platform: NodeJS.Platform) {
 
 /**
  * Locate an Rscript binary without spawning a shell.
- * Walks PATH (and a few well-known locations). Never invokes bash/cmd/sh.
+ * Order: explicit `override` → `CELLO_RSCRIPT` (unless honorEnv=false) → PATH
+ * (and a few well-known locations). Never invokes bash/cmd/sh.
  */
 export async function findRscript(options: FindRscriptOptions = {}): Promise<string | null> {
   const env = options.env ?? process.env
@@ -84,6 +95,13 @@ export async function findRscript(options: FindRscriptOptions = {}): Promise<str
   const listDir = options.listDir ?? defaultListDir
   const names = rscriptBasenames(platform)
   const paths = pathApi(platform)
+
+  const explicit =
+    (typeof options.override === 'string' ? options.override.trim() : '') ||
+    (options.honorEnv === false ? '' : String(env.CELLO_RSCRIPT ?? '').trim())
+  if (explicit) {
+    return (await pathExists(explicit)) ? explicit : null
+  }
 
   const dirs = pathEntries(env, platform)
   if (platform !== 'win32') {

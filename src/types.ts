@@ -96,6 +96,8 @@ export interface WorkspaceState {
     available: boolean
     version: string | null
     message: string | null
+    rscriptPath?: string | null
+    rscriptOverride?: string | null
   }
   history: HistoryEntry[]
   historyIndex: number

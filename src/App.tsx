@@ -267,8 +267,13 @@ export default function App() {
       {paletteOpen ? (
         <CommandPalette
           language={state.language}
+          rscriptPath={state.kernelStatus.rscriptOverride ?? null}
+          rscriptResolved={state.kernelStatus.rscriptPath ?? null}
+          kernelAvailable={state.kernelStatus.available}
+          kernelMessage={state.kernelStatus.message}
           onClose={closePalette}
           onRun={runPaletteCommand}
+          onSetRscriptPath={api.setRscriptPath}
         />
       ) : null}
     </div>
