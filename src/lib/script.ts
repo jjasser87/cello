@@ -110,7 +110,6 @@ sales <- data.frame(
   stringsAsFactors = FALSE
 )
 
-cello.table(sales, "sales")
 console$log("Loaded", nrow(sales), "rows")
 
 # %% Summarize by month
@@ -130,7 +129,6 @@ cello.plot(list(
 
 # %% Spotlight a region
 south <- subset(sales, region == "South")
-cello.table(south, "south_sales")
 console$log("South months:", paste(south$month, collapse = ", "))
 `
 

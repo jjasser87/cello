@@ -414,7 +414,9 @@ function DataPanel({ api }: SidePanelProps) {
     cellTables[cellTables.length - 1]
 
   if (!table) {
-    return <EmptyState text="No table for this cell. Use cello.table(rows, 'name')." />
+    return (
+      <EmptyState text="No table for this cell. Create a data.frame / tibble / matrix, or use cello.table() — this panel opens automatically." />
+    )
   }
 
   return (
