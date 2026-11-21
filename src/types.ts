@@ -42,9 +42,11 @@ export interface PlotSpec {
   id: string
   cellId: string
   title: string
-  kind: 'bar' | 'line'
+  kind: 'bar' | 'line' | 'image'
   labels: string[]
   values: number[]
+  /** data:image/png;base64,… for native R graphics (base plot / ggplot). */
+  imageData?: string
   createdAt: number
 }
 

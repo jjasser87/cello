@@ -20,6 +20,7 @@ interface ApiRunResult {
     kind?: string
     labels?: string[]
     values?: number[]
+    imageData?: string
     cellId?: string
   } | null
   table?: {
@@ -34,18 +35,37 @@ interface ApiRunResult {
 
 function toArtifacts(raw: ApiRunResult, cellId: string): RunArtifacts {
   let plot: PlotSpec | null = null
-  if (raw.plot && Array.isArray(raw.plot.labels) && Array.isArray(raw.plot.values)) {
-    plot = {
-      id: createId('plot'),
-      cellId,
-      title: raw.plot.title?.trim() || 'Plot',
-      kind: raw.plot.kind === 'line' ? 'line' : 'bar',
-      labels: raw.plot.labels.map(String),
-      values: raw.plot.values.map((value) => {
-        const n = typeof value === 'number' ? value : Number(value)
-        return Number.isFinite(n) ? n : 0
-      }),
-      createdAt: Date.now(),
+  if (raw.plot) {
+    const title = raw.plot.title?.trim() || 'Plot'
+    const imageData =
+      typeof raw.plot.imageData === 'string' && raw.plot.imageData.startsWith('data:image/')
+        ? raw.plot.imageData
+        : undefined
+
+    if (raw.plot.kind === 'image' && imageData) {
+      plot = {
+        id: createId('plot'),
+        cellId,
+        title,
+        kind: 'image',
+        labels: [],
+        values: [],
+        imageData,
+        createdAt: Date.now(),
+      }
+    } else if (Array.isArray(raw.plot.labels) && Array.isArray(raw.plot.values)) {
+      plot = {
+        id: createId('plot'),
+        cellId,
+        title,
+        kind: raw.plot.kind === 'line' ? 'line' : 'bar',
+        labels: raw.plot.labels.map(String),
+        values: raw.plot.values.map((value) => {
+          const n = typeof value === 'number' ? value : Number(value)
+          return Number.isFinite(n) ? n : 0
+        }),
+        createdAt: Date.now(),
+      }
     }
   }
 
