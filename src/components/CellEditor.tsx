@@ -96,8 +96,8 @@ export function CellEditor({
 
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
       <p className="editor-footnote">
-        <code>{language === 'r' ? '# %%' : '// %%'}</code> cells · 80-column writing surface ·
-        ⌘/Ctrl+Enter to run · {kernelHint ?? (language === 'r' ? 'R' : 'JS')} · ribbon for the rest
+        <code>{language === 'r' ? '# %%' : '// %%'}</code> · ⌘/Ctrl+Enter run ·
+        ⌘/Ctrl+Shift+P commands · {kernelHint ?? (language === 'r' ? 'R' : 'JS')}
       </p>
     </section>
   )
