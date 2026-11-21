@@ -357,10 +357,72 @@ code,
   padding: 0 0.25rem;
 }
 
+/*
+ * Dual-layer writing surface: colored highlight under a transparent textarea.
+ * Frame chrome (border / radius / bg) lives on .code-surface; the in-flow
+ * textarea still owns the 80ch + padding metrics the ribbon pins to.
+ */
+.code-surface {
+  position: relative;
+  display: block;
+  width: max-content;
+  max-width: none;
+  min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
+  /* Left corners only — right edge meets the ribbon flush. */
+  border-radius: var(--radius) 0 0 var(--radius);
+  border: var(--cell-border) solid var(--line);
+  border-right-color: transparent;
+  background: var(--bg-code);
+  box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
+  /* Syntax colors — warm cello wood on charcoal (enough contrast to read) */
+  --tok-comment: #6a635b;
+  --tok-string: #e0b07a;
+  --tok-number: #d4c08a;
+  --tok-keyword: #f0b84f;
+  --tok-builtin: #d4923f;
+  --tok-function: #f7f0e6;
+  --tok-operator: #a89888;
+  --tok-punctuation: #7a7168;
+}
+
+.code-surface:focus-within {
+  outline: 1px solid rgba(196, 138, 58, 0.45);
+  outline-offset: 0;
+  border-color: rgba(196, 138, 58, 0.35);
+}
+
+.code-highlight,
 .code-area {
-  /* Writing surface is exactly 80 monospace columns; padding sits outside. */
+  margin: 0;
+  padding: 1rem var(--cell-pad-x);
+  border: 0;
+  font-family: var(--font-mono);
+  font-size: 1em; /* inherit mono metrics from .main-window */
+  line-height: 1.55;
+  letter-spacing: 0;
+  white-space: pre;
+  tab-size: 2;
+  overflow: hidden;
+}
+
+.code-highlight {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  box-sizing: border-box;
+  width: auto;
+  max-width: none;
+  pointer-events: none;
+  color: var(--ink);
+  background: transparent;
+}
+
+.code-area {
+  position: relative;
+  z-index: 1;
   display: block;
   box-sizing: content-box;
+  /* Writing surface is exactly 80 monospace columns; padding sits outside. */
   width: 80ch;
   max-width: none;
   /*
@@ -371,28 +433,61 @@ code,
    */
   min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
   resize: none;
-  overflow: hidden;
-  white-space: pre;
-  tab-size: 2;
-  /* Left corners only — right edge meets the ribbon flush. */
-  border-radius: var(--radius) 0 0 var(--radius);
-  border: var(--cell-border) solid var(--line);
-  border-right-color: transparent;
-  background: var(--bg-code);
-  padding: 1rem var(--cell-pad-x);
-  font-family: var(--font-mono);
-  font-size: 1em; /* inherit mono metrics from .main-window */
-  line-height: 1.55;
-  letter-spacing: 0;
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
-  margin: 0;
+  background: transparent;
+  /* Ink lives on the highlight layer; caret stays visible. */
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--ink);
+}
+
+.code-area::placeholder {
+  color: var(--muted);
+  -webkit-text-fill-color: var(--muted);
+  opacity: 1;
+}
+
+.code-area::selection {
+  background: rgba(196, 138, 58, 0.32);
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 .code-area:focus {
-  outline: 1px solid rgba(196, 138, 58, 0.45);
-  outline-offset: 0;
-  border-color: rgba(196, 138, 58, 0.35);
+  outline: none;
+}
+
+.tok-comment {
+  color: var(--tok-comment);
+  font-style: italic;
+}
+
+.tok-string {
+  color: var(--tok-string);
+}
+
+.tok-number {
+  color: var(--tok-number);
+}
+
+.tok-keyword {
+  color: var(--tok-keyword);
+  font-weight: 500;
+}
+
+.tok-builtin {
+  color: var(--tok-builtin);
+}
+
+.tok-function {
+  color: var(--tok-function);
+}
+
+.tok-operator {
+  color: var(--tok-operator);
+}
+
+.tok-punctuation {
+  color: var(--tok-punctuation);
 }
 
 /* R completion popup — floats over the writing surface; no scrollbar chrome. */
@@ -1663,12 +1758,15 @@ code,
     min-width: 0;
   }
 
-  .code-area {
+  .code-surface {
     min-height: 220px;
-    /* Keep 80ch when possible; allow the page to scroll horizontally if needed. */
-    width: 80ch;
     border-radius: var(--radius);
     border-right-color: var(--line);
+  }
+
+  .code-area {
+    /* Keep 80ch when possible; allow the page to scroll horizontally if needed. */
+    width: 80ch;
   }
 
   .cell-header,
