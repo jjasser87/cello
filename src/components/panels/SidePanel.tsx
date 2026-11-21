@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { PanelId, ProjectFile } from '../../types'
@@ -85,7 +86,7 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
     files: { title: 'Files', blurb: 'Project tree.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
     data: { title: 'Data', blurb: 'Table from the selected cell.' },
-    structure: { title: 'Script flow', blurb: 'Where this cell sits.' },
+    structure: { title: 'Script flow', blurb: 'Auto graph of how cells connect.' },
     console: { title: 'Console', blurb: 'Output for the selected cell.' },
     ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
@@ -474,22 +475,12 @@ function StructurePanel({ api }: SidePanelProps) {
       <div className="structure-file">
         <span className="mono">{state.scriptPath}</span>
       </div>
-      <ol className="flow-list">
-        {state.cells.map((cell, index) => (
-          <li key={cell.id}>
-            <button
-              type="button"
-              className={cell.id === state.activeCellId ? 'is-current' : ''}
-              onClick={() => selectCell(cell.id, 'structure')}
-            >
-              <span>
-                {index + 1}. {cell.name}
-              </span>
-              <span className={`status-pill status-${cell.status}`}>{cell.status}</span>
-            </button>
-          </li>
-        ))}
-      </ol>
+      <FlowGraphView
+        cells={state.cells}
+        language={state.language}
+        activeCellId={state.activeCellId}
+        onSelect={(cellId) => selectCell(cellId, 'structure')}
+      />
     </div>
   )
 }

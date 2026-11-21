@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts",
     "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
-    "test:server": "node --experimental-strip-types --test server/*.test.ts"
+    "test:flow-graph": "node --experimental-strip-types --test src/lib/flowGraph.test.ts",
+    "test:server": "node --experimental-strip-types --test server/*.test.ts",
+    "test": "npm run test:server && npm run test:flow-graph"
   },
   "dependencies": {
     "react": "^19.3.1",
