@@ -395,6 +395,69 @@ code,
   border-color: rgba(196, 138, 58, 0.35);
 }
 
+/* R completion popup — floats over the writing surface; no scrollbar chrome. */
+.r-completion-popup {
+  position: absolute;
+  z-index: 20;
+  margin: 0;
+  padding: 0.2rem;
+  list-style: none;
+  min-width: 11rem;
+  max-width: min(28rem, 80ch);
+  max-height: 11.5rem;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px var(--wood-soft);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--ink);
+}
+
+.r-completion-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.28rem 0.45rem;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-soft);
+  text-align: left;
+  cursor: pointer;
+}
+
+.r-completion-item.is-active,
+.r-completion-item:hover {
+  background: var(--wood-soft);
+  color: var(--ink);
+}
+
+.r-completion-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.r-completion-kind {
+  flex: none;
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+.r-completion-item.is-active .r-completion-kind,
+.r-completion-item:hover .r-completion-kind {
+  color: var(--wood-bright);
+}
+
 /* Compact cell nav ribbon — replaces the long footer hint. */
 .cell-nav {
   display: flex;

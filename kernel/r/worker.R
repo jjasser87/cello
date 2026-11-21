@@ -365,6 +365,225 @@ encode_native_plot <- function(plot_file) {
   )
 }
 
+# —— Completions (v1) ————————————————————————————————————————————————
+# Prefer utils rcompgen for `$` / `::` / search-path symbols; soft-fallback
+# to .GlobalEnv + attached package names when internals are unavailable.
+
+extract_line_at_cursor <- function(code, cursor) {
+  if (!nzchar(code)) {
+    return(list(line = "", end = 0L, start = 0L))
+  }
+  cursor <- as.integer(cursor)
+  if (is.na(cursor) || cursor < 0L) cursor <- 0L
+  n <- nchar(code, type = "chars")
+  if (cursor > n) cursor <- n
+
+  before <- substr(code, 1L, cursor)
+  after <- if (cursor < n) substr(code, cursor + 1L, n) else ""
+
+  line_start <- gregexpr("\n", before, fixed = TRUE)[[1]]
+  if (identical(line_start[[1]], -1L)) {
+    start <- 0L
+  } else {
+    start <- max(line_start)
+  }
+  line_before <- if (start == 0L) before else substr(before, start + 1L, cursor)
+
+  line_end_m <- regexpr("\n", after, fixed = TRUE)[[1]]
+  line_after <- if (identical(line_end_m, -1L)) after else substr(after, 1L, line_end_m - 1L)
+
+  list(
+    line = paste0(line_before, line_after),
+    end = nchar(line_before, type = "chars"),
+    start = start
+  )
+}
+
+guess_prefix <- function(line, end) {
+  before <- substr(line, 1L, end)
+  m <- regexpr("([A-Za-z.][A-Za-z0-9._]*|)$", before, perl = TRUE)
+  if (identical(m[[1]], -1L)) return("")
+  substr(before, m[[1]], end)
+}
+
+attached_names <- function(prefix = "") {
+  names <- character(0)
+  for (env_name in search()) {
+    objs <- tryCatch(ls(env_name, all.names = FALSE), error = function(e) character(0))
+    names <- c(names, objs)
+  }
+  names <- unique(c(user_names(), names))
+  if (nzchar(prefix)) {
+    names <- names[startsWith(names, prefix)]
+  }
+  sort(names)
+}
+
+member_names <- function(expr_text, prefix = "") {
+  value <- tryCatch(
+    eval(parse(text = expr_text), envir = .GlobalEnv, enclos = .GlobalEnv),
+    error = function(e) NULL
+  )
+  if (is.null(value)) return(character(0))
+  nms <- tryCatch({
+    if (is.environment(value)) {
+      ls(value, all.names = FALSE)
+    } else if (is.data.frame(value) || is.list(value)) {
+      names(value)
+    } else if (is.atomic(value) && !is.null(names(value))) {
+      names(value)
+    } else {
+      character(0)
+    }
+  }, error = function(e) character(0))
+  if (is.null(nms)) nms <- character(0)
+  nms <- as.character(nms)
+  if (nzchar(prefix)) nms <- nms[startsWith(nms, prefix)]
+  sort(unique(nms[nzchar(nms)]))
+}
+
+package_exports <- function(pkg, prefix = "", triple = FALSE) {
+  if (!nzchar(pkg)) return(character(0))
+  nms <- tryCatch({
+    if (isTRUE(triple)) {
+      ls(asNamespace(pkg), all.names = FALSE)
+    } else {
+      getNamespaceExports(pkg)
+    }
+  }, error = function(e) character(0))
+  nms <- as.character(nms)
+  if (nzchar(prefix)) nms <- nms[startsWith(nms, prefix)]
+  sort(unique(nms[nzchar(nms)]))
+}
+
+classify_completion <- function(name) {
+  if (!exists(name, envir = .GlobalEnv, inherits = TRUE)) {
+    return("symbol")
+  }
+  value <- tryCatch(
+    get(name, envir = .GlobalEnv, inherits = TRUE),
+    error = function(e) NULL
+  )
+  if (is.null(value)) return("symbol")
+  if (is.function(value)) return("function")
+  if (is.data.frame(value) || is.list(value)) return("object")
+  if (is.atomic(value) && length(value) > 1) return("array")
+  "binding"
+}
+
+complete_manual <- function(line, end) {
+  before <- substr(line, 1L, end)
+
+  # pkg:::name or pkg::name
+  m_ns <- regexec(
+    "([A-Za-z.][A-Za-z0-9.]*)(::{1,3})([A-Za-z.][A-Za-z0-9._]*)?$",
+    before,
+    perl = TRUE
+  )[[1]]
+  if (!identical(m_ns[[1]], -1L)) {
+    pkg <- substr(before, m_ns[[2]], m_ns[[2]] + attr(m_ns, "match.length")[[2]] - 1L)
+    op <- substr(before, m_ns[[3]], m_ns[[3]] + attr(m_ns, "match.length")[[3]] - 1L)
+    token_len <- attr(m_ns, "match.length")[[4]]
+    token <- if (is.na(token_len) || token_len <= 0L) {
+      ""
+    } else {
+      substr(before, m_ns[[4]], m_ns[[4]] + token_len - 1L)
+    }
+    items <- package_exports(pkg, token, triple = identical(op, ":::"))
+    return(list(prefix = token, items = items, kind = "namespace"))
+  }
+
+  # obj$member
+  m_dollar <- regexec(
+    "([A-Za-z.][A-Za-z0-9._]*)\\$([A-Za-z.][A-Za-z0-9._]*)?$",
+    before,
+    perl = TRUE
+  )[[1]]
+  if (!identical(m_dollar[[1]], -1L)) {
+    obj <- substr(
+      before,
+      m_dollar[[2]],
+      m_dollar[[2]] + attr(m_dollar, "match.length")[[2]] - 1L
+    )
+    token_len <- attr(m_dollar, "match.length")[[3]]
+    token <- if (is.na(token_len) || token_len <= 0L) {
+      ""
+    } else {
+      substr(before, m_dollar[[3]], m_dollar[[3]] + token_len - 1L)
+    }
+    items <- member_names(obj, token)
+    return(list(prefix = token, items = items, kind = "member"))
+  }
+
+  token <- guess_prefix(line, end)
+  items <- attached_names(token)
+  list(prefix = token, items = items, kind = "symbol")
+}
+
+complete_rcompgen <- function(line, end) {
+  ns <- asNamespace("utils")
+  assign_line <- get(".assignLinebuffer", envir = ns)
+  assign_end <- get(".assignEnd", envir = ns)
+  guess <- get(".guessTokenFromLine", envir = ns)
+  complete_tok <- get(".completeToken", envir = ns)
+  retrieve <- get(".retrieveCompletions", envir = ns)
+  comp_env <- get(".CompletionEnv", envir = ns)
+
+  assign_line(line)
+  assign_end(as.integer(end))
+  guess()
+  complete_tok()
+  comps <- retrieve()
+  token <- tryCatch(comp_env$token, error = function(e) "")
+  if (is.null(token) || length(token) == 0L || is.na(token[[1]])) token <- ""
+  else token <- as.character(token[[1]])
+  list(prefix = token, items = as.character(comps), kind = "rcompgen")
+}
+
+run_complete <- function(req) {
+  code <- normalize_source(if (is.null(req$code)) "" else req$code)
+  cursor <- if (is.null(req$cursor)) {
+    nchar(code, type = "chars")
+  } else {
+    as.integer(req$cursor)
+  }
+  if (length(cursor) != 1L || is.na(cursor)) {
+    cursor <- nchar(code, type = "chars")
+  }
+
+  loc <- extract_line_at_cursor(code, cursor)
+  result <- tryCatch(
+    complete_rcompgen(loc$line, loc$end),
+    error = function(e) NULL
+  )
+  if (is.null(result)) {
+    result <- complete_manual(loc$line, loc$end)
+  } else if (length(result$items) == 0L) {
+    # rcompgen sometimes returns empty for GlobalEnv-only prefixes; merge manual.
+    manual <- complete_manual(loc$line, loc$end)
+    if (length(manual$items)) {
+      result$items <- unique(c(result$items, manual$items))
+      if (!nzchar(result$prefix)) result$prefix <- manual$prefix
+    }
+  }
+
+  # Cap payload — editor only shows a short list.
+  items <- unique(as.character(result$items))
+  items <- items[nzchar(items)]
+  if (length(items) > 80L) items <- items[seq_len(80L)]
+
+  prefix <- if (is.null(result$prefix)) "" else as.character(result$prefix)[[1]]
+  list(
+    type = "completions",
+    id = req$id,
+    prefix = prefix,
+    items = lapply(items, function(label) {
+      list(label = label, kind = classify_completion(label))
+    }),
+    error = NULL
+  )
+}
+
 run_eval <- function(req) {
   clear_artifacts()
   cell_id <- if (is.null(req$cellId)) "" else as.character(req$cellId)
@@ -526,6 +745,23 @@ local({
             plot = .cello_state$plot,
             table = .cello_state$table,
             env = snapshot_env(),
+            error = conditionMessage(e)
+          )
+        }
+      )
+      emit(result)
+      next
+    }
+
+    if (identical(req$op, "complete")) {
+      result <- tryCatch(
+        run_complete(req),
+        error = function(e) {
+          list(
+            type = "completions",
+            id = req$id,
+            prefix = "",
+            items = list(),
             error = conditionMessage(e)
           )
         }
