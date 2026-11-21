@@ -947,12 +947,22 @@ export function useWorkspace() {
       if (index < 0 || index >= prev.history.length) return prev
       const entry = prev.history[index]
       const cellExists = prev.cells.some((cell) => cell.id === entry.cellId)
+      // Prefer this run's plot/data so Plot/Data panels match History revisit;
+      // fall back to the latest artifact for the entry's cell when the run had none.
+      const cellPlotId =
+        entry.plotId ??
+        [...prev.plots].reverse().find((plot) => plot.cellId === entry.cellId)?.id ??
+        null
+      const cellTableId =
+        entry.dataId ??
+        [...prev.tables].reverse().find((table) => table.cellId === entry.cellId)?.id ??
+        null
       return {
         ...prev,
         historyIndex: index,
         activeCellId: cellExists ? entry.cellId : prev.activeCellId,
-        activePlotId: entry.plotId ?? prev.activePlotId,
-        activeTableId: entry.dataId ?? prev.activeTableId,
+        activePlotId: cellPlotId,
+        activeTableId: cellTableId,
       }
     })
   }, [])

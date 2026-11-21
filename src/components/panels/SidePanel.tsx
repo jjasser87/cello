@@ -1,8 +1,13 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
+import {
+  historyArtifactLabel,
+  resolveHistoryArtifacts,
+  type HistoryArtifactKind,
+} from '../../lib/historyArtifacts'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { PanelId } from '../../types'
+import type { DataTable, PanelId, PlotSpec, ProjectFile } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
 import { FilesPanel } from './FilesPanel'
 
@@ -89,7 +94,7 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
   const titles: Record<PanelId, { title: string; blurb: string }> = {
     cells: { title: 'Cells', blurb: 'Order determines script flow.' },
     explain: { title: 'Explain', blurb: 'Purpose doc for this cell.' },
-    history: { title: 'History', blurb: 'Runs for the selected cell.' },
+    history: { title: 'History', blurb: 'Prior console, plots, and data for this cell.' },
     plot: { title: 'Plot', blurb: 'Plot from the selected cell.' },
     files: { title: 'Files', blurb: 'Project file structure.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
@@ -159,7 +164,9 @@ function HistoryPanel({ api }: SidePanelProps) {
   const { state, setHistoryIndex, restoreHistoryCode } = api
   const cellHistory = state.history.filter((entry) => entry.cellId === state.activeCellId)
   if (cellHistory.length === 0) {
-    return <EmptyState text="No history for this cell yet. Run it to start building history." />
+    return (
+      <EmptyState text="No history for this cell yet. Run it to retain console, plots, and data." />
+    )
   }
   const current =
     state.historyIndex >= 0 ? state.history[state.historyIndex] : undefined
@@ -169,6 +176,7 @@ function HistoryPanel({ api }: SidePanelProps) {
     if (match >= 0) localIndex = match
   }
   const entry = cellHistory[localIndex]
+  const artifacts = resolveHistoryArtifacts(entry, state.plots, state.tables)
   const lines = diffLines(entry.previousCode, entry.code)
   const goToLocal = (nextLocal: number) => {
     const target = cellHistory[nextLocal]
@@ -184,26 +192,88 @@ function HistoryPanel({ api }: SidePanelProps) {
           type="button"
           onClick={() => goToLocal(localIndex - 1)}
           disabled={localIndex <= 0}
-          aria-label="Previous version"
+          aria-label="Previous run"
         >
           ←
         </button>
         <div>
           <strong>{entry.cellName}</strong>
           <div className="muted">
-            {localIndex + 1} / {cellHistory.length} ·{' '}
+            Run {localIndex + 1} / {cellHistory.length} ·{' '}
             {new Date(entry.timestamp).toLocaleTimeString()}
+            {entry.status === 'error' ? ' · error' : ''}
           </div>
+          <HistoryBadges kinds={artifacts.kinds} />
         </div>
         <button
           type="button"
           onClick={() => goToLocal(localIndex + 1)}
           disabled={localIndex >= cellHistory.length - 1}
-          aria-label="Next version"
+          aria-label="Next run"
         >
           →
         </button>
       </div>
+
+      {cellHistory.length > 1 ? (
+        <ul className="history-run-list" aria-label="Runs for this cell">
+          {cellHistory
+            .slice()
+            .reverse()
+            .map((item, reverseIndex) => {
+              const itemLocal = cellHistory.length - 1 - reverseIndex
+              const itemArtifacts = resolveHistoryArtifacts(item, state.plots, state.tables)
+              return (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    className={item.id === entry.id ? 'is-active' : ''}
+                    onClick={() => goToLocal(itemLocal)}
+                  >
+                    <span className="history-run-meta">
+                      <span className="mono">#{itemLocal + 1}</span>
+                      <span className="muted">
+                        {new Date(item.timestamp).toLocaleTimeString()}
+                      </span>
+                      {item.status === 'error' ? (
+                        <span className="history-run-error">err</span>
+                      ) : null}
+                    </span>
+                    <HistoryBadges kinds={itemArtifacts.kinds} />
+                  </button>
+                </li>
+              )
+            })}
+        </ul>
+      ) : null}
+
+      <div className="history-artifacts" aria-label="Retained outputs for this run">
+        <HistoryArtifactBlock title="Console">
+          {artifacts.consoleText ? (
+            <pre className="output-block">{artifacts.consoleText}</pre>
+          ) : (
+            <p className="muted small">No console output from this run.</p>
+          )}
+        </HistoryArtifactBlock>
+
+        <HistoryArtifactBlock title="Plot">
+          {artifacts.plot ? (
+            <HistoryPlotPreview plot={artifacts.plot} />
+          ) : (
+            <p className="muted small">No plot from this run.</p>
+          )}
+        </HistoryArtifactBlock>
+
+        <HistoryArtifactBlock title="Data">
+          {artifacts.table ? (
+            <HistoryTablePreview table={artifacts.table} />
+          ) : (
+            <p className="muted small">No table from this run.</p>
+          )}
+        </HistoryArtifactBlock>
+      </div>
+
+      {entry.error ? <div className="cell-error">Error: {entry.error}</div> : null}
 
       <div className="diff-grid">
         <div className="diff-pane">
@@ -219,7 +289,7 @@ function HistoryPanel({ api }: SidePanelProps) {
           </pre>
         </div>
         <div className="diff-pane">
-          <div className="diff-label">Current run</div>
+          <div className="diff-label">This run</div>
           <pre>
             {lines.map((line, i) =>
               line.type === 'remove' ? null : (
@@ -231,9 +301,6 @@ function HistoryPanel({ api }: SidePanelProps) {
           </pre>
         </div>
       </div>
-
-      {entry.outputText ? <pre className="output-block">{entry.outputText}</pre> : null}
-      {entry.error ? <div className="cell-error">Error: {entry.error}</div> : null}
 
       <button
         type="button"
@@ -248,6 +315,90 @@ function HistoryPanel({ api }: SidePanelProps) {
       >
         Restore this code into the cell
       </button>
+    </div>
+  )
+}
+
+function HistoryBadges({ kinds }: { kinds: HistoryArtifactKind[] }) {
+  if (kinds.length === 0) {
+    return <div className="history-badges muted small">No retained outputs</div>
+  }
+  return (
+    <div className="history-badges" aria-label="Retained outputs">
+      {kinds.map((kind) => (
+        <span key={kind} className={`history-badge history-badge-${kind}`}>
+          {historyArtifactLabel(kind)}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function HistoryArtifactBlock({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <section className="history-artifact-block">
+      <h3>{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function HistoryPlotPreview({ plot }: { plot: PlotSpec }) {
+  return (
+    <div className="history-plot-preview">
+      <div className="plot-title-row">
+        <h4>{plot.title}</h4>
+        <span className="muted">{plot.kind}</span>
+      </div>
+      {plot.kind === 'image' && plot.imageData ? (
+        <img className="plot-image" src={plot.imageData} alt={plot.title} />
+      ) : plot.kind === 'line' ? (
+        <LineChart plot={plot} />
+      ) : (
+        <BarChart plot={plot} />
+      )}
+    </div>
+  )
+}
+
+function HistoryTablePreview({ table }: { table: DataTable }) {
+  const previewRows = table.rows.slice(0, 12)
+  const hidden = table.rows.length - previewRows.length
+  return (
+    <div className="history-table-preview">
+      <div className="plot-title-row">
+        <h4>{table.name}</h4>
+        <span className="muted">
+          {table.rows.length} rows · {table.columns.length} cols
+        </span>
+      </div>
+      <div className="table-scroll">
+        <table className="data-table">
+          <thead>
+            <tr>
+              {table.columns.map((col) => (
+                <th key={col}>{col}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {previewRows.map((row, index) => (
+              <tr key={index}>
+                {table.columns.map((col) => (
+                  <td key={col}>{formatCell(row[col])}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {hidden > 0 ? <p className="muted small">+{hidden} more rows in Data</p> : null}
     </div>
   )
 }
