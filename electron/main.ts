@@ -5,7 +5,7 @@
  * on a loopback server, then loads the built Vite UI from `dist/`.
  * Day-to-day development stays `npm run dev` (web + Vite middleware).
  */
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, shell, type BrowserWindowConstructorOptions } from 'electron'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
@@ -170,15 +170,44 @@ async function startHost(): Promise<{ url: string; close: () => Promise<void> }>
 let mainWindow: BrowserWindow | null = null
 let closeHost: (() => Promise<void>) | null = null
 
+/** Match BrowserWindow backgroundColor / charcoal shell. */
+const WINDOW_CHROME_BG = '#0c0b0a'
+const WINDOW_CHROME_FG = '#c8c2b8'
+const TITLE_BAR_OVERLAY_HEIGHT = 32
+
+/**
+ * Default: hidden title bar + native overlay min/max/close (no custom traffic lights).
+ * Opt out with CELLO_NATIVE_FRAME=1 for the normal OS frame.
+ */
+function nativeFrameRequested(): boolean {
+  const raw = String(process.env.CELLO_NATIVE_FRAME ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes'
+}
+
+function windowChromeOptions(): BrowserWindowConstructorOptions {
+  if (nativeFrameRequested()) return {}
+  return {
+    // Prefer titleBarStyle + overlay over frame:false so Windows keeps native
+    // caption buttons without a custom traffic-light UI.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: WINDOW_CHROME_BG,
+      symbolColor: WINDOW_CHROME_FG,
+      height: TITLE_BAR_OVERLAY_HEIGHT,
+    },
+  }
+}
+
 async function createWindow(url: string) {
   mainWindow = new BrowserWindow({
     width: 1180,
     height: 820,
     minWidth: 720,
     minHeight: 520,
-    backgroundColor: '#0c0b0a',
+    backgroundColor: WINDOW_CHROME_BG,
     title: 'Cello',
     autoHideMenuBar: true,
+    ...windowChromeOptions(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
