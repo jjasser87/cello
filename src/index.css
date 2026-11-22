@@ -159,6 +159,34 @@ code,
 }
 
 /*
+ * Electron hug-content mode: drop 100vh fill so the window can shrink to the
+ * cell cluster. Fixed panel width avoids a vw↔window resize feedback loop.
+ */
+html.is-desktop,
+html.is-desktop body,
+html.is-desktop #root {
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+html.is-desktop {
+  --panel-width: 420px;
+}
+
+html.is-desktop .app-shell,
+html.is-desktop .workspace {
+  min-height: 0;
+  height: auto;
+  overflow: hidden;
+}
+
+html.is-desktop .app-shell {
+  width: max-content;
+  max-width: 100%;
+}
+
+/*
  * Outer cluster keeps the cell on the 80ch column.
  * Title + compact icons sit outside the lane so the ribbon can match the
  * code-area frame height exactly.

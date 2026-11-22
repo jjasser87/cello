@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { CellEditor } from './components/CellEditor'
 import { CommandPalette, type CommandId } from './components/CommandPalette'
 import { SidePanel } from './components/panels/SidePanel'
+import { useDesktopWindowFit } from './hooks/useDesktopWindowFit'
 import { useWorkspace } from './hooks/useWorkspace'
 import { exportProjectJson } from './lib/storage'
 import { projectFileName } from './lib/projectFile'
@@ -15,6 +16,14 @@ export default function App() {
   const total = state.cells.length
   const [paletteOpen, setPaletteOpen] = useState(false)
   const openProjectInputRef = useRef<HTMLInputElement>(null)
+
+  // Electron: hug the editor cluster; grow/shrink when ribbon panels toggle.
+  useDesktopWindowFit({
+    sidePanelOpen: state.sidePanelOpen,
+    activePanel: state.activePanel,
+    cellId: activeCell.id,
+    codeLength: activeCell.code.length,
+  })
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
 

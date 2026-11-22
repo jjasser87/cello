@@ -102,7 +102,7 @@ If you already have a fresh `dist/`:
 npm run desktop:app
 ```
 
-By default the desktop window uses a **hidden title bar** with native overlay min/max/close (no Windows border chrome). Restore the normal OS frame with `CELLO_NATIVE_FRAME=1`.
+By default the desktop window is **frameless** (`frame: false`) with native overlay min/max/close, and the outer size hugs the editor cell (expanding when a ribbon panel opens). Restore the normal OS frame with `CELLO_NATIVE_FRAME=1`.
 
 ### npm install scripts (Electron / esbuild)
 

@@ -11,10 +11,11 @@ directories:
 extraMetadata:
   main: electron/main-bundle.mjs
 
-# UI + bundled main only. React/Vite stay out of the package (already in dist/).
+# UI + bundled main + preload bridge. React/Vite stay out (already in dist/).
 files:
   - dist/**/*
   - electron/main-bundle.mjs
+  - electron/preload.cjs
   - package.json
   - '!node_modules/**/*'
 
