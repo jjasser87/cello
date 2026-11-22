@@ -37,7 +37,7 @@ try {
   if (status !== 0) process.exit(status)
 
   const extra = process.argv.slice(2)
-  const builderArgs = ['electron-builder', '--win', '--x64', ...extra]
+  const builderArgs = ['electron-builder', '--win', '--x64', '--publish', 'never', ...extra]
   status = run('npx', builderArgs)
 } finally {
   fs.writeFileSync(pkgPath, snapshot)
