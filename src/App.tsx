@@ -21,6 +21,7 @@ export default function App() {
   useDesktopWindowFit({
     sidePanelOpen: state.sidePanelOpen,
     activePanel: state.activePanel,
+    helperDock: state.helperDock,
     cellId: activeCell.id,
     codeLength: activeCell.code.length,
   })
@@ -207,7 +208,10 @@ export default function App() {
         tabIndex={-1}
         onChange={onOpenProjectFile}
       />
-      <div className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}>
+      <div
+        className={`workspace ${state.sidePanelOpen ? 'panel-open' : 'panel-collapsed'}`}
+        data-dock={state.helperDock}
+      >
         <div className="workspace-cluster">
           <CellEditor
             cell={activeCell}
@@ -354,9 +358,11 @@ export default function App() {
           rscriptResolved={state.kernelStatus.rscriptPath ?? null}
           kernelAvailable={state.kernelStatus.available}
           kernelMessage={state.kernelStatus.message}
+          helperDock={state.helperDock}
           onClose={closePalette}
           onRun={runPaletteCommand}
           onSetRscriptPath={api.setRscriptPath}
+          onSetHelperDock={api.setHelperDock}
         />
       ) : null}
     </div>

@@ -6,7 +6,7 @@ import {
   resetRKernel,
   runAllOnRKernel,
 } from '../lib/kernelClient'
-import { loadSettings, saveSettings } from '../lib/settings'
+import { loadSettings, saveSettings, type HelperDock } from '../lib/settings'
 import { createSharedBag, runCellCode, type RunArtifacts } from '../lib/runtime'
 import { createComment, emptyExplanationTemplate } from '../lib/explanation'
 import {
@@ -55,6 +55,7 @@ function buildFromProject(
       : cells[0].id,
     activePanel: project.activePanel,
     sidePanelOpen: extras?.sidePanelOpen ?? false,
+    helperDock: loadSettings().helperDock,
     language: project.language,
     kernelStatus: extras?.kernelStatus ?? {
       available: false,
@@ -85,6 +86,7 @@ function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName())
     activeCellId: cells[0].id,
     activePanel: 'cells',
     sidePanelOpen: false,
+    helperDock: loadSettings().helperDock,
     language,
     kernelStatus: {
       available: false,
@@ -200,6 +202,9 @@ export function useWorkspace() {
       activeCellId: state.activeCellId,
       activePanel: state.activePanel,
       sidePanelOpen: false,
+      // App setting (also in localStorage settings); included so the object
+      // satisfies WorkspaceState for saveWorkspace typing.
+      helperDock: state.helperDock,
       language: state.language,
       kernelStatus: state.kernelStatus,
       scriptPath: state.scriptPath,
@@ -220,6 +225,7 @@ export function useWorkspace() {
       state.cells,
       state.activeCellId,
       state.activePanel,
+      state.helperDock,
       state.language,
       state.kernelStatus,
       state.scriptPath,
@@ -1144,6 +1150,11 @@ export function useWorkspace() {
     }
   }, [])
 
+  const setHelperDock = useCallback((helperDock: HelperDock) => {
+    const saved = saveSettings({ helperDock })
+    setState((prev) => ({ ...prev, helperDock: saved.helperDock }))
+  }, [])
+
   return {
     state,
     activeCell,
@@ -1161,6 +1172,7 @@ export function useWorkspace() {
     moveCell,
     setLanguage,
     setRscriptPath,
+    setHelperDock,
     newProject,
     openProjectJson,
     renameProject,

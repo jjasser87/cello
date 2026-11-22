@@ -3,20 +3,46 @@
  *
  * Shape:
  * ```json
- * { "rscriptPath": "/usr/local/bin/Rscript" | null }
+ * {
+ *   "rscriptPath": "/usr/local/bin/Rscript" | null,
+ *   "helperDock": "left" | "right" | "top" | "bottom"
+ * }
  * ```
  *
  * `rscriptPath` is an optional override for the machine Rscript binary.
  * Cleared / null → kernel host auto-discovers via PATH (and CELLO_RSCRIPT).
+ *
+ * `helperDock` places the ribbon panel cluster relative to the main editor
+ * (default: left — helpers expand leftward).
  */
+import type { HelperDock } from '../types'
+
+export type { HelperDock }
+
 const KEY = 'cello.settings.v0'
 
 export type AppSettings = {
   rscriptPath: string | null
+  helperDock: HelperDock
 }
 
 const DEFAULTS: AppSettings = {
   rscriptPath: null,
+  helperDock: 'left',
+}
+
+const DOCKS: readonly HelperDock[] = ['left', 'right', 'top', 'bottom']
+
+export function isHelperDock(value: unknown): value is HelperDock {
+  return typeof value === 'string' && (DOCKS as readonly string[]).includes(value)
+}
+
+function normalizeRscriptPath(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+function normalizeHelperDock(value: unknown): HelperDock {
+  return isHelperDock(value) ? value : DEFAULTS.helperDock
 }
 
 export function loadSettings(): AppSettings {
@@ -24,11 +50,10 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(KEY)
     if (!raw) return { ...DEFAULTS }
     const parsed = JSON.parse(raw) as Partial<AppSettings>
-    const path =
-      typeof parsed.rscriptPath === 'string' && parsed.rscriptPath.trim()
-        ? parsed.rscriptPath.trim()
-        : null
-    return { rscriptPath: path }
+    return {
+      rscriptPath: normalizeRscriptPath(parsed.rscriptPath),
+      helperDock: normalizeHelperDock(parsed.helperDock),
+    }
   } catch {
     return { ...DEFAULTS }
   }
@@ -40,9 +65,11 @@ export function saveSettings(partial: Partial<AppSettings>): AppSettings {
     rscriptPath:
       partial.rscriptPath === undefined
         ? current.rscriptPath
-        : typeof partial.rscriptPath === 'string' && partial.rscriptPath.trim()
-          ? partial.rscriptPath.trim()
-          : null,
+        : normalizeRscriptPath(partial.rscriptPath),
+    helperDock:
+      partial.helperDock === undefined
+        ? current.helperDock
+        : normalizeHelperDock(partial.helperDock),
   }
   try {
     localStorage.setItem(KEY, JSON.stringify(next))

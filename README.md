@@ -104,6 +104,8 @@ npm run desktop:app
 
 By default the desktop window is **frameless** (`frame: false`) with native overlay min/max/close, and the outer size hugs the editor cell (expanding when a ribbon panel opens). Restore the normal OS frame with `CELLO_NATIVE_FRAME=1`.
 
+Helper ribbon panels dock on the **left** of the editor by default (expand leftward). Change the side under **Settings…** in the command palette (`Helper dock`: left / right / top / bottom).
+
 ### npm install scripts (Electron / esbuild)
 
 npm 12+ blocks dependency install scripts unless they are listed in `package.json` `allowScripts`. Cello commits approvals for **electron** (required — downloads the desktop binary) and **esbuild** (used by Vite/tsx). With that field present, a normal `npm install` should run Electron’s postinstall.
