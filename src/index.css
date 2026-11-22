@@ -137,6 +137,19 @@ code,
     var(--bg);
 }
 
+/*
+ * Desktop (Electron hidden title bar): full-width drag strip under the native
+ * overlay controls. env(titlebar-area-height) is set by Electron; browsers
+ * fall back to 0px so web layout is unchanged.
+ */
+.window-chrome-drag {
+  height: env(titlebar-area-height, 0px);
+  width: 100%;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
 .workspace {
   min-height: 100vh;
   /* Block formatting context: the lane is inline-flex and cannot stretch to the window edge. */
@@ -318,6 +331,18 @@ code,
   font-family: var(--font-ui);
   font-size: 0.75rem;
   line-height: 1.15;
+  /* Extra window-drag surface below the overlay strip (Electron; ignored in browsers). */
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.cell-header button,
+.cell-header input,
+.cell-header select,
+.cell-header label,
+.cell-header .cell-toolbar {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 .stack-ops,

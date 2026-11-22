@@ -102,6 +102,8 @@ If you already have a fresh `dist/`:
 npm run desktop:app
 ```
 
+By default the desktop window uses a **hidden title bar** with native overlay min/max/close (no Windows border chrome). Restore the normal OS frame with `CELLO_NATIVE_FRAME=1`.
+
 ### npm install scripts (Electron / esbuild)
 
 npm 12+ blocks dependency install scripts unless they are listed in `package.json` `allowScripts`. Cello commits approvals for **electron** (required — downloads the desktop binary) and **esbuild** (used by Vite/tsx). With that field present, a normal `npm install` should run Electron’s postinstall.

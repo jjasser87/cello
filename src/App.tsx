@@ -184,6 +184,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {/*
+        Electron title-bar drag strip. Height is env(titlebar-area-height) when
+        the desktop shell uses a hidden title bar + overlay; 0px in the browser.
+      */}
+      <div className="window-chrome-drag" aria-hidden="true" />
       <input
         ref={openProjectInputRef}
         type="file"
