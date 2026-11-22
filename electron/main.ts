@@ -5,7 +5,14 @@
  * on a loopback server, then loads the built Vite UI from `dist/`.
  * Day-to-day development stays `npm run dev` (web + Vite middleware).
  */
-import { app, BrowserWindow, shell, type BrowserWindowConstructorOptions } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  shell,
+  type BrowserWindowConstructorOptions,
+  type IpcMainInvokeEvent,
+} from 'electron'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createReadStream } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
@@ -14,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { createKernelSession } from '../server/rKernelHost.ts'
 
 const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const ELECTRON_DIR = path.dirname(fileURLToPath(import.meta.url))
 
 /** Repo root in dev; `app.getAppPath()` when packaged (asar / resources/app). */
 function appRoot(): string {
@@ -23,6 +31,12 @@ function appRoot(): string {
 /** Vite UI build — inside the app package (asar-safe; Node streams it). */
 function distDir(): string {
   return path.join(appRoot(), 'dist')
+}
+
+function preloadScript(): string {
+  // Dev: electron/preload.cjs next to main.ts / main.mjs.
+  // Packaged: same folder as main-bundle.mjs (shipped beside the asar entry).
+  return path.join(ELECTRON_DIR, 'preload.cjs')
 }
 
 /**
@@ -169,6 +183,7 @@ async function startHost(): Promise<{ url: string; close: () => Promise<void> }>
 
 let mainWindow: BrowserWindow | null = null
 let closeHost: (() => Promise<void>) | null = null
+let windowShown = false
 
 /** Match BrowserWindow backgroundColor / charcoal shell. */
 const WINDOW_CHROME_BG = '#0c0b0a'
@@ -176,8 +191,12 @@ const WINDOW_CHROME_FG = '#c8c2b8'
 const TITLE_BAR_OVERLAY_HEIGHT = 32
 
 /**
- * Default: hidden title bar + native overlay min/max/close (no custom traffic lights).
+ * Default: true frameless window (`frame: false`) + native overlay min/max/close.
  * Opt out with CELLO_NATIVE_FRAME=1 for the normal OS frame.
+ *
+ * `#27` used only `titleBarStyle: 'hidden'`, which still left Windows border
+ * chrome for some users — `frame: false` (+ `thickFrame: false` on win32)
+ * removes the OS frame. Overlay keeps caption buttons without a custom UI.
  */
 function nativeFrameRequested(): boolean {
   const raw = String(process.env.CELLO_NATIVE_FRAME ?? '').trim().toLowerCase()
@@ -186,9 +205,18 @@ function nativeFrameRequested(): boolean {
 
 function windowChromeOptions(): BrowserWindowConstructorOptions {
   if (nativeFrameRequested()) return {}
-  return {
-    // Prefer titleBarStyle + overlay over frame:false so Windows keeps native
-    // caption buttons without a custom traffic-light UI.
+
+  // macOS: hidden title bar keeps native traffic lights; do not set frame:false
+  // or the lights disappear unless we rebuild them.
+  if (process.platform === 'darwin') {
+    return { titleBarStyle: 'hidden' }
+  }
+
+  // Windows / Linux: true frameless + Window Controls Overlay for min/max/close.
+  // `#27` only set titleBarStyle/overlay and still left a Windows border for
+  // some users — frame:false is required. thickFrame:false drops WS_THICKFRAME.
+  const options: BrowserWindowConstructorOptions = {
+    frame: false,
     titleBarStyle: 'hidden',
     titleBarOverlay: {
       color: WINDOW_CHROME_BG,
@@ -196,19 +224,77 @@ function windowChromeOptions(): BrowserWindowConstructorOptions {
       height: TITLE_BAR_OVERLAY_HEIGHT,
     },
   }
+  if (process.platform === 'win32') {
+    options.thickFrame = false
+  }
+  return options
+}
+
+function windowFromEvent(event: IpcMainInvokeEvent): BrowserWindow | null {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (!win || win.isDestroyed()) return null
+  return win
+}
+
+function registerWindowIpc() {
+  ipcMain.handle('cello:set-content-size', (event, payload: unknown) => {
+    const win = windowFromEvent(event)
+    if (!win) return { ok: false as const }
+
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const width = Math.round(Number(body.width))
+    const height = Math.round(Number(body.height))
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return { ok: false as const }
+    // Guard absurd sizes from a bad measure.
+    if (width < 200 || height < 200 || width > 8000 || height > 8000) {
+      return { ok: false as const }
+    }
+
+    const [curW, curH] = win.getContentSize()
+    if (Math.abs(curW - width) > 1 || Math.abs(curH - height) > 1) {
+      win.setContentSize(width, height)
+    }
+    if (!windowShown) {
+      windowShown = true
+      win.show()
+    }
+    return { ok: true as const, width, height }
+  })
+
+  ipcMain.handle('cello:window-minimize', (event) => {
+    windowFromEvent(event)?.minimize()
+    return { ok: true as const }
+  })
+
+  ipcMain.handle('cello:window-maximize-toggle', (event) => {
+    const win = windowFromEvent(event)
+    if (!win) return { ok: false as const }
+    if (win.isMaximized()) win.unmaximize()
+    else win.maximize()
+    return { ok: true as const, maximized: win.isMaximized() }
+  })
+
+  ipcMain.handle('cello:window-close', (event) => {
+    windowFromEvent(event)?.close()
+    return { ok: true as const }
+  })
 }
 
 async function createWindow(url: string) {
+  windowShown = false
   mainWindow = new BrowserWindow({
-    width: 1180,
-    height: 820,
-    minWidth: 720,
-    minHeight: 520,
+    // Temporary until the renderer measures the cell cluster and calls setContentSize.
+    width: 880,
+    height: 640,
+    minWidth: 320,
+    minHeight: 240,
+    show: false,
     backgroundColor: WINDOW_CHROME_BG,
     title: 'Cello',
     autoHideMenuBar: true,
     ...windowChromeOptions(),
     webPreferences: {
+      preload: preloadScript(),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -222,7 +308,17 @@ async function createWindow(url: string) {
 
   mainWindow.on('closed', () => {
     mainWindow = null
+    windowShown = false
   })
+
+  // If the renderer never reports a size (older UI / failed preload), still show.
+  const showFallback = setTimeout(() => {
+    if (!windowShown && mainWindow && !mainWindow.isDestroyed()) {
+      windowShown = true
+      mainWindow.show()
+    }
+  }, 2500)
+  mainWindow.once('closed', () => clearTimeout(showFallback))
 
   await mainWindow.loadURL(url)
 }
@@ -230,6 +326,7 @@ async function createWindow(url: string) {
 let hostUrl: string | null = null
 
 app.whenReady().then(async () => {
+  registerWindowIpc()
   try {
     const host = await startHost()
     closeHost = host.close
