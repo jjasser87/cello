@@ -20,6 +20,7 @@ export type CommandId =
   | 'new-project'
   | 'save-project'
   | 'open-project'
+  | 'open-folder'
   | 'settings'
 
 export interface CommandItem {
@@ -95,19 +96,25 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
     {
       id: 'new-project',
       label: 'New project',
-      hint: 'Starter cells + file tree',
+      hint: 'In-memory starter',
+      group: 'Project',
+    },
+    {
+      id: 'open-folder',
+      label: 'Open folder…',
+      hint: 'cello.json',
       group: 'Project',
     },
     {
       id: 'save-project',
       label: 'Save project…',
-      hint: '.cello',
+      hint: 'cello.json / .cello',
       group: 'Project',
     },
     {
       id: 'open-project',
-      label: 'Open project…',
-      hint: '.cello',
+      label: 'Open .cello file…',
+      hint: 'Import JSON',
       group: 'Project',
     },
     {

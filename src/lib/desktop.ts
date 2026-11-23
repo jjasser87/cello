@@ -2,12 +2,39 @@
  * Desktop (Electron) helpers. No-ops in the browser (`npm run dev`).
  */
 
+import type { DiskEntry } from './projectFs'
+
 export type CelloDesktopApi = {
   isDesktop: true
   setContentSize: (width: number, height: number) => Promise<unknown>
   minimize: () => Promise<unknown>
   maximizeToggle: () => Promise<unknown>
   close: () => Promise<unknown>
+  openFolder?: () => Promise<
+    | {
+        ok: true
+        root: string
+        manifestText: string | null
+        created: boolean
+      }
+    | { ok: false; error: string; cancelled?: boolean }
+  >
+  listFolder?: (
+    root: string,
+    options?: { showSidecar?: boolean; maxDepth?: number },
+  ) => Promise<
+    { ok: true; entries: DiskEntry[] } | { ok: false; error: string }
+  >
+  readTextFile?: (
+    absolutePath: string,
+  ) => Promise<{ ok: true; text: string } | { ok: false; error: string }>
+  writeTextFile?: (
+    absolutePath: string,
+    contents: string,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  setProjectCwd?: (
+    cwd: string | null,
+  ) => Promise<{ ok: true; cwd: string | null } | { ok: false; error: string }>
 }
 
 declare global {

@@ -140,9 +140,20 @@ export interface WorkspaceState {
   activeConsoleId: string | null
   env: EnvBinding[]
   consoleLines: string[]
-  /** Project file tree shown in the Files ribbon panel. */
+  /** Project file tree shown in the Files ribbon panel (virtual or disk listing). */
   files: ProjectFile[]
-  /** Durable project metadata (name + timestamps) for `.cello` save. */
+  /** Durable project metadata (name + timestamps) for `.cello` / `cello.json` save. */
   meta: ProjectMeta
   scriptPath: string
+  /**
+   * Absolute path of an opened folder project (structure B), or null for
+   * in-memory / downloadable `.cello` projects.
+   */
+  projectRoot: string | null
+  /** `disk` when Files panel lists a real folder; `virtual` for the legacy tree. */
+  filesSource: 'virtual' | 'disk'
+  /** Opt-in: persist run artifacts under `.cello/runs` when saving a folder project. */
+  saveOutputs: boolean
+  /** Hide `.cello/` in the Files panel (default true). */
+  hideSidecar: boolean
 }
