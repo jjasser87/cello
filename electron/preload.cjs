@@ -24,4 +24,19 @@ contextBridge.exposeInMainWorld('celloDesktop', {
   close() {
     return ipcRenderer.invoke('cello:window-close')
   },
+  openFolder() {
+    return ipcRenderer.invoke('cello:open-folder')
+  },
+  listFolder(root, options) {
+    return ipcRenderer.invoke('cello:list-folder', { root, ...(options || {}) })
+  },
+  readTextFile(absolutePath) {
+    return ipcRenderer.invoke('cello:read-text', { path: absolutePath })
+  },
+  writeTextFile(absolutePath, contents) {
+    return ipcRenderer.invoke('cello:write-text', { path: absolutePath, contents })
+  },
+  setProjectCwd(cwd) {
+    return ipcRenderer.invoke('cello:set-project-cwd', { cwd })
+  },
 })

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import { pathFromRoot } from '../../lib/projectFile'
+import { MANIFEST_NAME } from '../../lib/folderProject'
 import type { ProjectFile } from '../../types'
 
 interface FilesPanelProps {
@@ -11,6 +12,7 @@ export function FilesPanel({ api }: FilesPanelProps) {
   const { state } = api
   const root = state.files[0]
   const [draftName, setDraftName] = useState<string | null>(null)
+  const isDisk = state.filesSource === 'disk'
 
   const projectName = state.meta.name || root?.name || 'project'
 
@@ -50,12 +52,54 @@ export function FilesPanel({ api }: FilesPanelProps) {
             {projectName}
           </button>
         )}
-        <span className="muted small mono file-ext-badge">.cello</span>
+        <span className="muted small mono file-ext-badge">
+          {isDisk ? MANIFEST_NAME : '.cello'}
+        </span>
       </div>
+
+      {isDisk && state.projectRoot ? (
+        <p className="muted small file-script-line" title={state.projectRoot}>
+          Folder: <code>{state.projectRoot}</code>
+        </p>
+      ) : null}
 
       <p className="muted small file-script-line">
         Active script: <code>{state.scriptPath}</code>
       </p>
+
+      {isDisk ? (
+        <div className="file-disk-toolbar">
+          <label className="file-disk-toggle">
+            <input
+              type="checkbox"
+              checked={!state.hideSidecar}
+              onChange={(event) => api.setHideSidecar(!event.target.checked)}
+            />
+            <span className="muted small">Show .cello/</span>
+          </label>
+          <label className="file-disk-toggle">
+            <input
+              type="checkbox"
+              checked={state.saveOutputs}
+              onChange={(event) => api.setSaveOutputs(event.target.checked)}
+            />
+            <span className="muted small">Save outputs</span>
+          </label>
+          <button
+            type="button"
+            className="file-refresh-btn"
+            title="Refresh folder listing"
+            onClick={() => void api.refreshDiskFiles()}
+          >
+            Refresh
+          </button>
+        </div>
+      ) : (
+        <p className="muted small">
+          Use <strong>Open folder…</strong> in the command palette for a real disk project (
+          {MANIFEST_NAME} + .cello/).
+        </p>
+      )}
 
       {root ? (
         <FileNode
@@ -64,6 +108,7 @@ export function FilesPanel({ api }: FilesPanelProps) {
           isRoot
           activePath={state.scriptPath}
           api={api}
+          diskMode={isDisk}
           defaultOpen
         />
       ) : (
@@ -79,6 +124,7 @@ function FileNode({
   isRoot,
   activePath,
   api,
+  diskMode,
   defaultOpen = false,
 }: {
   node: ProjectFile
@@ -86,6 +132,7 @@ function FileNode({
   isRoot?: boolean
   activePath: string
   api: WorkspaceApi
+  diskMode: boolean
   defaultOpen?: boolean
 }) {
   const [open, setOpen] = useState(defaultOpen || depth < 2)
@@ -94,10 +141,10 @@ function FileNode({
   const [adding, setAdding] = useState<'file' | 'folder' | null>(null)
   const [addName, setAddName] = useState('')
 
-  const nodePath = useMemo(
-    () => pathFromRoot(api.state.files, node.id),
-    [api.state.files, node.id],
-  )
+  const nodePath = useMemo(() => {
+    if (node.id.startsWith('disk:')) return node.id.slice('disk:'.length)
+    return pathFromRoot(api.state.files, node.id)
+  }, [api.state.files, node.id])
   const isActive = node.kind === 'file' && nodePath === activePath
 
   const commitRename = () => {
@@ -132,7 +179,7 @@ function FileNode({
           </span>
         )}
 
-        {renaming ? (
+        {renaming && !diskMode ? (
           <input
             className="file-rename-input"
             value={draft}
@@ -164,62 +211,69 @@ function FileNode({
               api.selectProjectFile(node.id)
             }}
             onDoubleClick={() => {
+              if (diskMode) return
               setDraft(node.name)
               setRenaming(true)
             }}
             title={
               node.kind === 'file'
-                ? `Set active script · double-click to rename`
-                : `Double-click to rename`
+                ? diskMode
+                  ? 'Mark as active script path'
+                  : 'Set active script · double-click to rename'
+                : diskMode
+                  ? 'Folder'
+                  : 'Double-click to rename'
             }
           >
             {node.name}
           </button>
         )}
 
-        <div className="file-ops">
-          {node.kind === 'folder' ? (
-            <>
+        {!diskMode ? (
+          <div className="file-ops">
+            {node.kind === 'folder' ? (
+              <>
+                <button
+                  type="button"
+                  title="New file"
+                  aria-label="New file"
+                  onClick={() => {
+                    setAdding('file')
+                    setAddName('')
+                    setOpen(true)
+                  }}
+                >
+                  +
+                </button>
+                <button
+                  type="button"
+                  title="New folder"
+                  aria-label="New folder"
+                  onClick={() => {
+                    setAdding('folder')
+                    setAddName('')
+                    setOpen(true)
+                  }}
+                >
+                  ▤
+                </button>
+              </>
+            ) : null}
+            {!isRoot ? (
               <button
                 type="button"
-                title="New file"
-                aria-label="New file"
-                onClick={() => {
-                  setAdding('file')
-                  setAddName('')
-                  setOpen(true)
-                }}
+                title="Delete"
+                aria-label={`Delete ${node.name}`}
+                onClick={() => api.deleteProjectFile(node.id)}
               >
-                +
+                ×
               </button>
-              <button
-                type="button"
-                title="New folder"
-                aria-label="New folder"
-                onClick={() => {
-                  setAdding('folder')
-                  setAddName('')
-                  setOpen(true)
-                }}
-              >
-                ▤
-              </button>
-            </>
-          ) : null}
-          {!isRoot ? (
-            <button
-              type="button"
-              title="Delete"
-              aria-label={`Delete ${node.name}`}
-              onClick={() => api.deleteProjectFile(node.id)}
-            >
-              ×
-            </button>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {adding && node.kind === 'folder' ? (
+      {adding && node.kind === 'folder' && !diskMode ? (
         <div className="file-add-row" style={{ paddingLeft: (depth + 1) * 12 }}>
           <span className="muted small">{adding === 'folder' ? 'folder' : 'file'}</span>
           <input
@@ -256,6 +310,7 @@ function FileNode({
               depth={depth + 1}
               activePath={activePath}
               api={api}
+              diskMode={diskMode}
             />
           ))}
         </div>

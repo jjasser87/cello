@@ -8,6 +8,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   shell,
   type BrowserWindowConstructorOptions,
@@ -15,10 +16,39 @@ import {
 } from 'electron'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createReadStream } from 'node:fs'
-import { access, stat } from 'node:fs/promises'
+import { access, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { createKernelSession } from '../server/rKernelHost.ts'
+import { createKernelSession, type KernelSession } from '../server/rKernelHost.ts'
+
+const MANIFEST_NAME = 'cello.json'
+const SIDECAR_DIR = '.cello'
+
+/** Minimal lean manifest stub (mirrors src/lib/folderProject createFolderManifest). */
+function stubFolderManifest(name: string): string {
+  const now = Date.now()
+  const cellId = `cell_${Math.random().toString(36).slice(2, 9)}`
+  const doc = {
+    format: 'cello-project',
+    version: 2,
+    meta: { name, createdAt: now, updatedAt: now },
+    language: 'r',
+    scriptPath: 'analysis.R',
+    activeCellId: cellId,
+    activePanel: 'files',
+    cells: [
+      {
+        id: cellId,
+        name: 'Untitled',
+        code: '# %% Untitled\n',
+        explanation: '',
+        comments: [],
+      },
+    ],
+    artifactsDir: '.cello',
+  }
+  return `${JSON.stringify(doc, null, 2)}\n`
+}
 
 const MODULE_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const ELECTRON_DIR = path.dirname(fileURLToPath(import.meta.url))
@@ -128,7 +158,11 @@ async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<voi
   createReadStream(target).pipe(res)
 }
 
-async function startHost(): Promise<{ url: string; close: () => Promise<void> }> {
+async function startHost(): Promise<{
+  url: string
+  close: () => Promise<void>
+  session: KernelSession
+}> {
   if (!(await pathExists(path.join(distDir(), 'index.html')))) {
     throw new Error(
       'Missing dist/index.html. Run `npm run build` (or use `npm run desktop`, which builds first).',
@@ -178,12 +212,66 @@ async function startHost(): Promise<{ url: string; close: () => Promise<void> }>
     })
   }
 
-  return { url, close }
+  return { url, close, session }
+}
+
+type DiskEntry = {
+  name: string
+  kind: 'file' | 'folder'
+  path: string
+  children?: DiskEntry[]
+}
+
+async function listDiskTree(
+  absRoot: string,
+  rel: string,
+  depth: number,
+  maxDepth: number,
+  showSidecar: boolean,
+): Promise<DiskEntry[]> {
+  if (depth > maxDepth) return []
+  const abs = rel ? path.join(absRoot, rel) : absRoot
+  let names: string[]
+  try {
+    names = await readdir(abs)
+  } catch {
+    return []
+  }
+  names.sort((a, b) => a.localeCompare(b))
+  const out: DiskEntry[] = []
+  for (const name of names) {
+    if (!showSidecar && name === SIDECAR_DIR) continue
+    if (name === '.git' || name === 'node_modules') continue
+    const childRel = rel ? `${rel}/${name}` : name
+    const childAbs = path.join(absRoot, childRel)
+    let info
+    try {
+      info = await stat(childAbs)
+    } catch {
+      continue
+    }
+    if (info.isDirectory()) {
+      const children = await listDiskTree(absRoot, childRel, depth + 1, maxDepth, showSidecar)
+      out.push({ name, kind: 'folder', path: childRel.replace(/\\/g, '/'), children })
+    } else if (info.isFile()) {
+      out.push({ name, kind: 'file', path: childRel.replace(/\\/g, '/') })
+    }
+  }
+  return out
+}
+
+function isPathInside(root: string, target: string): boolean {
+  const resolvedRoot = path.resolve(root)
+  const resolvedTarget = path.resolve(target)
+  return resolvedTarget === resolvedRoot || resolvedTarget.startsWith(resolvedRoot + path.sep)
 }
 
 let mainWindow: BrowserWindow | null = null
 let closeHost: (() => Promise<void>) | null = null
+let kernelSession: KernelSession | null = null
 let windowShown = false
+/** Last opened project root — used to sandbox read/write IPC. */
+let projectRoot: string | null = null
 
 /** Match BrowserWindow backgroundColor / charcoal shell. */
 const WINDOW_CHROME_BG = '#0c0b0a'
@@ -286,6 +374,122 @@ function registerWindowIpc() {
   })
 }
 
+function registerProjectIpc() {
+  ipcMain.handle('cello:open-folder', async (event) => {
+    const win = windowFromEvent(event)
+    const result = win
+      ? await dialog.showOpenDialog(win, {
+          title: 'Open Cello project folder',
+          properties: ['openDirectory', 'createDirectory'],
+        })
+      : await dialog.showOpenDialog({
+          title: 'Open Cello project folder',
+          properties: ['openDirectory', 'createDirectory'],
+        })
+    if (result.canceled || !result.filePaths[0]) {
+      return { ok: false as const, error: 'Cancelled', cancelled: true as const }
+    }
+    const root = path.resolve(result.filePaths[0])
+    const manifest = path.join(root, MANIFEST_NAME)
+    let created = false
+    let manifestText: string | null = null
+    try {
+      if (await pathExists(manifest)) {
+        manifestText = await readFile(manifest, 'utf8')
+      } else {
+        const name = path.basename(root) || 'project'
+        manifestText = stubFolderManifest(name)
+        await writeFile(manifest, manifestText, 'utf8')
+        await mkdir(path.join(root, SIDECAR_DIR), { recursive: true })
+        created = true
+      }
+    } catch (err) {
+      return {
+        ok: false as const,
+        error: err instanceof Error ? err.message : String(err),
+      }
+    }
+    projectRoot = root
+    if (kernelSession) {
+      try {
+        await kernelSession.setProjectCwd(root)
+      } catch {
+        /* status surfaces later */
+      }
+    }
+    return { ok: true as const, root, manifestText, created }
+  })
+
+  ipcMain.handle('cello:list-folder', async (_event, payload: unknown) => {
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const root = typeof body.root === 'string' ? path.resolve(body.root) : ''
+    if (!root) return { ok: false as const, error: 'Missing folder root' }
+    if (projectRoot && !isPathInside(projectRoot, root) && path.resolve(root) !== projectRoot) {
+      return { ok: false as const, error: 'Folder is outside the opened project' }
+    }
+    const showSidecar = Boolean(body.showSidecar)
+    const maxDepth =
+      typeof body.maxDepth === 'number' && Number.isFinite(body.maxDepth)
+        ? Math.max(1, Math.min(12, Math.floor(body.maxDepth)))
+        : 6
+    try {
+      const entries = await listDiskTree(root, '', 1, maxDepth, showSidecar)
+      return { ok: true as const, entries }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('cello:read-text', async (_event, payload: unknown) => {
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const target = typeof body.path === 'string' ? path.resolve(body.path) : ''
+    if (!target) return { ok: false as const, error: 'Missing path' }
+    if (!projectRoot || !isPathInside(projectRoot, target)) {
+      return { ok: false as const, error: 'Path is outside the opened project' }
+    }
+    try {
+      const text = await readFile(target, 'utf8')
+      return { ok: true as const, text }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('cello:write-text', async (_event, payload: unknown) => {
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const target = typeof body.path === 'string' ? path.resolve(body.path) : ''
+    const contents = typeof body.contents === 'string' ? body.contents : null
+    if (!target || contents === null) return { ok: false as const, error: 'Missing path or contents' }
+    if (!projectRoot || !isPathInside(projectRoot, target)) {
+      return { ok: false as const, error: 'Path is outside the opened project' }
+    }
+    try {
+      await mkdir(path.dirname(target), { recursive: true })
+      await writeFile(target, contents, 'utf8')
+      return { ok: true as const }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('cello:set-project-cwd', async (_event, payload: unknown) => {
+    const body = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+    const raw = body.cwd
+    const cwd =
+      raw === null || raw === undefined || raw === ''
+        ? null
+        : path.resolve(String(raw))
+    if (cwd) projectRoot = cwd
+    if (!kernelSession) return { ok: false as const, error: 'Kernel host not ready' }
+    try {
+      await kernelSession.setProjectCwd(cwd)
+      return { ok: true as const, cwd }
+    } catch (err) {
+      return { ok: false as const, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+}
+
 async function createWindow(url: string) {
   windowShown = false
   mainWindow = new BrowserWindow({
@@ -333,9 +537,11 @@ let hostUrl: string | null = null
 
 app.whenReady().then(async () => {
   registerWindowIpc()
+  registerProjectIpc()
   try {
     const host = await startHost()
     closeHost = host.close
+    kernelSession = host.session
     hostUrl = host.url
     await createWindow(host.url)
   } catch (err) {

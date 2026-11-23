@@ -21,6 +21,22 @@ import {
   type CelloProjectV1,
 } from '../lib/projectFile'
 import {
+  folderManifestAsV1,
+  parseFolderManifest,
+  serializeFolderManifest,
+  stringifyFolderManifest,
+  MANIFEST_NAME,
+} from '../lib/folderProject'
+import {
+  diskEntriesToProjectFiles,
+  folderDisplayName,
+  joinProjectPath,
+  listProjectFolder,
+  openProjectFolder,
+  setKernelProjectCwd,
+  writeProjectText,
+} from '../lib/projectFs'
+import {
   createId,
   cellsToScript,
   defaultScriptPath,
@@ -72,9 +88,13 @@ function buildFromProject(
     activeConsoleId: null,
     env: [],
     consoleLines: extras?.consoleLines ?? ['Ready. Run a cell with ⌘/Ctrl+Enter.'],
-    files: project.files,
+    files: project.files.length > 0 ? project.files : defaultProjectFiles(project.meta.name, project.language),
     meta: project.meta,
     scriptPath: project.scriptPath,
+    projectRoot: null,
+    filesSource: 'virtual',
+    saveOutputs: false,
+    hideSidecar: true,
   }
 }
 
@@ -108,6 +128,10 @@ function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName())
     files: defaultProjectFiles(name, language),
     meta: { name, createdAt: now, updatedAt: now },
     scriptPath: defaultScriptPath(language),
+    projectRoot: null,
+    filesSource: 'virtual',
+    saveOutputs: false,
+    hideSidecar: true,
   }
 }
 
@@ -218,11 +242,20 @@ export function useWorkspace() {
       activeConsoleId: null,
       env: [] as WorkspaceState['env'],
       consoleLines: [] as string[],
-      files: state.files,
+      // localStorage stays memory-mode; never persist a live disk listing.
+      files:
+        state.filesSource === 'disk'
+          ? defaultProjectFiles(state.meta.name, state.language)
+          : state.files,
       meta: state.meta,
+      projectRoot: null,
+      filesSource: 'virtual' as const,
+      saveOutputs: false,
+      hideSidecar: true,
     }),
     [
       state.cells,
+      state.filesSource,
       state.activeCellId,
       state.activePanel,
       state.helperDock,
@@ -497,6 +530,7 @@ export function useWorkspace() {
   const newProject = useCallback((language?: KernelLanguage) => {
     sharedRef.current = createSharedBag()
     const lang = language ?? stateRef.current.language
+    void setKernelProjectCwd(null)
     setState((prev) => {
       // Distinct name so the Files panel clearly shows a fresh project.
       const fresh = buildFresh(lang, 'untitled')
@@ -521,6 +555,7 @@ export function useWorkspace() {
     const parsed = parseProject(raw)
     if (!parsed.ok) return parsed
     sharedRef.current = createSharedBag()
+    void setKernelProjectCwd(null)
     setState((prev) => {
       const next = buildFromProject(parsed.project, {
         kernelStatus: prev.kernelStatus,
@@ -537,6 +572,134 @@ export function useWorkspace() {
       })
     }
     return { ok: true }
+  }, [])
+
+  const refreshDiskFiles = useCallback(async () => {
+    const root = stateRef.current.projectRoot
+    if (!root || stateRef.current.filesSource !== 'disk') return
+    const listed = await listProjectFolder(root, {
+      showSidecar: !stateRef.current.hideSidecar,
+    })
+    if (!listed.ok) {
+      setState((prev) => ({
+        ...prev,
+        consoleLines: [...prev.consoleLines, `Could not list folder: ${listed.error}`].slice(-200),
+      }))
+      return
+    }
+    const name = folderDisplayName(root)
+    setState((prev) => ({
+      ...prev,
+      files: diskEntriesToProjectFiles(name, listed.entries, {
+        showSidecar: !prev.hideSidecar,
+      }),
+    }))
+  }, [])
+
+  const openFolder = useCallback(async (): Promise<
+    { ok: true; created: boolean } | { ok: false; error: string; cancelled?: boolean }
+  > => {
+    const picked = await openProjectFolder()
+    if (!picked.ok) {
+      return {
+        ok: false,
+        error: picked.error,
+        cancelled: picked.cancelled,
+      }
+    }
+
+    const parsed = picked.manifestText
+      ? parseFolderManifest(picked.manifestText)
+      : { ok: false as const, error: 'Missing cello.json' }
+    if (!parsed.ok) {
+      return { ok: false, error: parsed.error }
+    }
+
+    const listed = await listProjectFolder(picked.root, { showSidecar: false })
+    const folderName = folderDisplayName(picked.root)
+    const diskFiles = listed.ok
+      ? diskEntriesToProjectFiles(folderName, listed.entries, { showSidecar: false })
+      : [
+          {
+            id: 'disk:',
+            name: folderName,
+            kind: 'folder' as const,
+            children: [{ id: `disk:${MANIFEST_NAME}`, name: MANIFEST_NAME, kind: 'file' as const }],
+          },
+        ]
+
+    const asV1 = folderManifestAsV1(parsed.project)
+    sharedRef.current = createSharedBag()
+    await setKernelProjectCwd(picked.root)
+
+    setState((prev) => {
+      const next = buildFromProject(asV1, {
+        kernelStatus: prev.kernelStatus,
+        consoleLines: [
+          picked.created
+            ? `Initialized Cello project in ${picked.root} (wrote ${MANIFEST_NAME}).`
+            : `Opened folder project “${parsed.project.meta.name}” · ${picked.root}`,
+        ],
+        sidePanelOpen: true,
+      })
+      return {
+        ...next,
+        files: diskFiles,
+        projectRoot: picked.root,
+        filesSource: 'disk',
+        saveOutputs: false,
+        hideSidecar: true,
+        activePanel: 'files',
+        sidePanelOpen: true,
+        meta: {
+          ...next.meta,
+          name: parsed.project.meta.name || folderName,
+        },
+      }
+    })
+
+    if (parsed.project.language === 'r') {
+      void resetRKernel().catch(() => {
+        /* ignore */
+      })
+    }
+    return { ok: true, created: picked.created }
+  }, [])
+
+  const saveFolderProject = useCallback(async (): Promise<
+    { ok: true } | { ok: false; error: string }
+  > => {
+    const snapshot = stateRef.current
+    if (!snapshot.projectRoot || snapshot.filesSource !== 'disk') {
+      return { ok: false, error: 'No folder project is open' }
+    }
+    const manifest = serializeFolderManifest(snapshot)
+    const target = joinProjectPath(snapshot.projectRoot, MANIFEST_NAME)
+    const written = await writeProjectText(target, stringifyFolderManifest(manifest))
+    if (!written.ok) return written
+
+    // Opt-in runs persistence can land later; sidecar dir is created on init.
+    setState((prev) => ({
+      ...prev,
+      meta: { ...prev.meta, updatedAt: Date.now() },
+      consoleLines: [
+        ...prev.consoleLines,
+        `Saved ${MANIFEST_NAME}${prev.saveOutputs ? ' (+ outputs opt-in pending flush)' : ''}.`,
+      ].slice(-200),
+    }))
+    await refreshDiskFiles()
+    return { ok: true }
+  }, [refreshDiskFiles])
+
+  const setHideSidecar = useCallback((hideSidecar: boolean) => {
+    setState((prev) => ({ ...prev, hideSidecar }))
+    queueMicrotask(() => {
+      void refreshDiskFiles()
+    })
+  }, [refreshDiskFiles])
+
+  const setSaveOutputs = useCallback((saveOutputs: boolean) => {
+    setState((prev) => ({ ...prev, saveOutputs }))
   }, [])
 
   const renameProject = useCallback((name: string) => {
@@ -557,6 +720,8 @@ export function useWorkspace() {
 
   const renameProjectFile = useCallback((id: string, name: string) => {
     setState((prev) => {
+      // Disk mode is listing-only for now (rename lands with later FS write APIs).
+      if (prev.filesSource === 'disk') return prev
       const files = renameFileNode(prev.files, id, name)
       const root = files[0]
       const meta =
@@ -576,17 +741,21 @@ export function useWorkspace() {
 
   const addProjectFile = useCallback(
     (parentId: string, kind: 'file' | 'folder', name: string) => {
-      setState((prev) => ({
-        ...prev,
-        files: addFileChild(prev.files, parentId, kind, name),
-        meta: { ...prev.meta, updatedAt: Date.now() },
-      }))
+      setState((prev) => {
+        if (prev.filesSource === 'disk') return prev
+        return {
+          ...prev,
+          files: addFileChild(prev.files, parentId, kind, name),
+          meta: { ...prev.meta, updatedAt: Date.now() },
+        }
+      })
     },
     [],
   )
 
   const deleteProjectFile = useCallback((id: string) => {
     setState((prev) => {
+      if (prev.filesSource === 'disk') return prev
       // Never delete the project root.
       if (prev.files[0]?.id === id) return prev
       return {
@@ -599,6 +768,17 @@ export function useWorkspace() {
 
   const selectProjectFile = useCallback((id: string) => {
     setState((prev) => {
+      // Disk nodes encode relative path in the id: `disk:path/to/file`.
+      if (id.startsWith('disk:')) {
+        const rel = id.slice('disk:'.length)
+        if (!rel) return prev
+        return {
+          ...prev,
+          scriptPath: rel,
+          activePanel: 'files',
+          sidePanelOpen: true,
+        }
+      }
       const path = pathFromRoot(prev.files, id)
       if (path === null || path === '') return prev
       return {
@@ -1175,6 +1355,11 @@ export function useWorkspace() {
     setHelperDock,
     newProject,
     openProjectJson,
+    openFolder,
+    saveFolderProject,
+    refreshDiskFiles,
+    setHideSidecar,
+    setSaveOutputs,
     renameProject,
     renameProjectFile,
     addProjectFile,

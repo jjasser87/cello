@@ -1705,6 +1705,29 @@ html.is-desktop .workspace {
   gap: 0.45rem;
 }
 
+.file-disk-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.file-disk-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  cursor: pointer;
+}
+
+.file-disk-toggle input {
+  accent-color: var(--wood);
+}
+
+.file-refresh-btn {
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+}
+
 .file-project-name {
   border: 0;
   background: transparent;

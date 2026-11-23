@@ -22,8 +22,8 @@ Cello is a minimalist, cell-based development environment. The main window stays
 - **Plot / Console / Data** each retain prior outputs for the selected cell; selecting an older item restores the code that produced it
 - Command palette / settings entry via ⌘/Ctrl+Shift+P (panels, Explain cell, run, language, prefs stub)
 - Compact cell nav under the editor: prev/next + Alt+↑/↓ (palette Navigate commands too)
-- **Files** ribbon panel — project file tree (not a separate “project cell”); New / Save / Open project from the command palette
-- Durable **`.cello`** project file (JSON) for cells, explanations, comments, file tree, and UI selection; autosave uses the same schema in `localStorage`
+- **Files** ribbon panel — real disk tree when a folder project is open; New / Save / **Open folder** / Open `.cello` from the command palette
+- Folder projects (structure B): lean **`cello.json`** + **`.cello/`** sidecar; downloadable **`.cello`** JSON still works for in-memory projects; autosave uses the same schema in `localStorage`
 
 ## Develop (with R)
 
@@ -210,7 +210,7 @@ Durable save format: a JSON document with `"format": "cello-project"` / `"versio
 
 Autosave writes the same payload to `localStorage` (`cello.workspace.v1`; v0 payloads migrate on load). Runtime plots / tables / env / history are not persisted — they rebuild on run. Flow graphs are derived from cells (no separate Mermaid blob).
 
-Command palette (`⌘/Ctrl+Shift+P`): **New project**, **Save project…** (downloads `name.cello`), **Open project…**.
+Command palette (`⌘/Ctrl+Shift+P`): **Open folder…** (desktop: native picker → `cello.json` + `.cello/`; sets kernel cwd), **New project**, **Save project…** (writes `cello.json` in a folder project, or downloads `name.cello`), **Open .cello file…**.
 
 Plain-text script export (`⇩`) remains code-only with `# %%` / `// %%` markers — explanations are **not** embedded in `.R` / `.js` files.
 

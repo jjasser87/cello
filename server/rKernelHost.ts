@@ -129,6 +129,8 @@ class RKernelProcess {
   private unavailableReason: string | null = null
   private rscriptOverride: string | null = null
   private resolvedRscript: string | null = null
+  /** Opened project folder — spawn cwd + R setwd target. */
+  private projectCwd: string | null = null
   /** When true, ignore exit reason from an intentional stop/reconfigure. */
   private suppressExitReason = false
   private readonly paths: KernelPaths
@@ -146,7 +148,27 @@ class RKernelProcess {
       lastError: this.lastError,
       rscriptPath: this.resolvedRscript,
       rscriptOverride: this.rscriptOverride,
+      projectCwd: this.projectCwd,
     }
+  }
+
+  /**
+   * Point the kernel at an opened project folder (structure B).
+   * Updates spawn cwd for the next start and `setwd` on a live worker.
+   */
+  async setProjectCwd(cwd: string | null): Promise<ReturnType<RKernelProcess['status']>> {
+    const next =
+      typeof cwd === 'string' && cwd.trim() ? path.resolve(cwd.trim()) : null
+    this.projectCwd = next
+    if (next && this.child && this.booted) {
+      const rPath = next.replace(/\\/g, '/')
+      try {
+        await this.eval(`setwd(${JSON.stringify(rPath)})`, '_project_cwd')
+      } catch (err) {
+        this.lastError = err instanceof Error ? err.message : String(err)
+      }
+    }
+    return this.status()
   }
 
   /**
@@ -209,7 +231,7 @@ class RKernelProcess {
 
     this.ready = new Promise<void>((resolve, reject) => {
       const child = spawn(rscript, ['--vanilla', this.paths.worker], {
-        cwd: this.paths.root,
+        cwd: this.projectCwd ?? this.paths.root,
         env: {
           ...process.env,
           R_LIBS_USER: this.paths.libDir,
@@ -419,6 +441,7 @@ export type KernelSession = {
   ensureStarted: () => Promise<void>
   stop: () => void
   status: () => ReturnType<RKernelProcess['status']>
+  setProjectCwd: (cwd: string | null) => Promise<ReturnType<RKernelProcess['status']>>
   /**
    * Handle a `/api/kernel*` request. Returns true when handled
    * (caller must not call `next` / continue).
@@ -433,6 +456,7 @@ export function createKernelSession(options: CreateKernelSessionOptions = {}): K
     ensureStarted: () => kernel.ensureStarted(),
     stop: () => kernel.stop(),
     status: () => kernel.status(),
+    setProjectCwd: (cwd) => kernel.setProjectCwd(cwd),
     async handleApi(req, res) {
       const url = req.url?.split('?')[0] ?? ''
       if (!url.startsWith('/api/kernel')) return false
@@ -455,6 +479,15 @@ export function createKernelSession(options: CreateKernelSessionOptions = {}): K
           const raw = body.rscriptPath
           const pathValue = raw === null || raw === undefined ? null : String(raw)
           const status = await kernel.configure(pathValue)
+          sendJson(res, 200, status)
+          return true
+        }
+
+        if (req.method === 'POST' && url === '/api/kernel/cwd') {
+          const body = (await readJson(req)) as { cwd?: string | null }
+          const raw = body.cwd
+          const cwdValue = raw === null || raw === undefined || raw === '' ? null : String(raw)
+          const status = await kernel.setProjectCwd(cwdValue)
           sendJson(res, 200, status)
           return true
         }

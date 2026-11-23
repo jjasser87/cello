@@ -39,6 +39,14 @@ export default function App() {
   }, [api, index, total, state.cells])
 
   const saveProject = useCallback(() => {
+    if (state.projectRoot && state.filesSource === 'disk') {
+      void api.saveFolderProject().then((result) => {
+        if (!result.ok) {
+          window.alert(`Could not save folder project: ${result.error}`)
+        }
+      })
+      return
+    }
     const json = exportProjectJson(state)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -47,11 +55,20 @@ export default function App() {
     anchor.download = projectFileName(state.meta.name)
     anchor.click()
     URL.revokeObjectURL(url)
-  }, [state])
+  }, [state, api])
 
   const pickOpenProject = useCallback(() => {
     openProjectInputRef.current?.click()
   }, [])
+
+  const pickOpenFolder = useCallback(() => {
+    void api.openFolder().then((result) => {
+      if (!result.ok) {
+        if (result.cancelled) return
+        window.alert(`Could not open folder: ${result.error}`)
+      }
+    })
+  }, [api])
 
   const onOpenProjectFile = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -130,6 +147,11 @@ export default function App() {
         pickOpenProject()
         return
       }
+      if (id === 'open-folder') {
+        setPaletteOpen(false)
+        pickOpenFolder()
+        return
+      }
     },
     [
       api,
@@ -139,6 +161,7 @@ export default function App() {
       goNextCell,
       saveProject,
       pickOpenProject,
+      pickOpenFolder,
     ],
   )
 
