@@ -361,11 +361,15 @@ function SettingsPanel({
         <button type="button" className="palette-back" onClick={onBack} aria-label="Back to commands">
           ←
         </button>
-        <h2>Settings</h2>
+        <h2>
+          <img className="brand-mark" src="/cello-logo.png" alt="" width={22} height={22} />
+          Settings
+        </h2>
         <button type="button" className="palette-back" onClick={onClose} aria-label="Close">
           ×
         </button>
       </div>
+      <p className="palette-brand-line muted small">Cello · One cell. Full focus.</p>
       <div className="palette-settings-body">
         <label className="palette-pref">
           <span className="palette-pref-label">Kernel language</span>

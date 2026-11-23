@@ -492,8 +492,22 @@ function registerProjectIpc() {
   })
 }
 
+/** App / window icon: Vite copies `public/cello-logo.png` into `dist/`. */
+async function resolveAppIcon(): Promise<string | undefined> {
+  const candidates = [
+    path.join(distDir(), 'cello-logo.png'),
+    path.join(appRoot(), 'public', 'cello-logo.png'),
+    path.join(appRoot(), 'build', 'icon.png'),
+  ]
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) return candidate
+  }
+  return undefined
+}
+
 async function createWindow(url: string) {
   windowShown = false
+  const icon = await resolveAppIcon()
   mainWindow = new BrowserWindow({
     // Temporary until the renderer measures the cell cluster and calls setContentSize.
     width: 880,
@@ -504,6 +518,7 @@ async function createWindow(url: string) {
     backgroundColor: WINDOW_CHROME_BG,
     title: 'Cello',
     autoHideMenuBar: true,
+    ...(icon ? { icon } : {}),
     ...windowChromeOptions(),
     webPreferences: {
       preload: preloadScript(),

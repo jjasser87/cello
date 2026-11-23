@@ -28,6 +28,9 @@ asar: true
 npmRebuild: false
 nodeGypRebuild: false
 
+# Official Cello mark from the Notion project page (also public/cello-logo.png).
+icon: build/icon.png
+
 win:
   target:
     - target: nsis
@@ -36,6 +39,7 @@ win:
     - target: portable
       arch:
         - x64
+  icon: build/icon.png
   # Unsigned for now — CI/Windows builds still produce installable artifacts.
   signAndEditExecutable: false
 
