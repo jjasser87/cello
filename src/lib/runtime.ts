@@ -1,4 +1,5 @@
 import type { DataTable, EnvBinding, PlotSpec } from '../types'
+import { buildJsEnvDetail } from './envPreview'
 import { createId } from './script'
 
 export interface RunArtifacts {
@@ -205,7 +206,7 @@ function snapshotEnv(shared: SharedBag): EnvBinding[] {
     .map((name) => {
       const value = shared[name]
       const { kind, preview } = previewValue(value)
-      return { name, kind, preview }
+      return { name, kind, preview, detail: buildJsEnvDetail(value) }
     })
 }
 

@@ -96,10 +96,33 @@ export interface ConsoleEntry {
   historyId?: string
 }
 
+/** Truncated inline preview payload for an Environment binding (from env snapshot). */
+export type EnvDetail =
+  | { form: 'scalar'; text: string }
+  | { form: 'vector'; values: string[]; truncated: boolean; total: number }
+  | {
+      form: 'list'
+      entries: { name: string; preview: string }[]
+      truncated: boolean
+      total: number
+    }
+  | {
+      form: 'table'
+      columns: string[]
+      rows: Record<string, string | number | boolean | null>[]
+      truncated: boolean
+      totalRows: number
+      totalCols: number
+    }
+  | { form: 'function'; text: string }
+  | { form: 'summary'; text: string; tooLarge: boolean }
+
 export interface EnvBinding {
   name: string
   kind: 'number' | 'string' | 'boolean' | 'array' | 'object' | 'function' | 'null' | 'undefined'
   preview: string
+  /** Optional richer contents for the Environment inline preview pane. */
+  detail?: EnvDetail
 }
 
 export interface ProjectFile {

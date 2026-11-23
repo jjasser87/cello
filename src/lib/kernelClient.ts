@@ -1,4 +1,5 @@
 import type { DataTable, EnvBinding, PlotSpec } from '../types'
+import { normalizeEnvDetail } from './envPreview'
 import { createId } from './script'
 import type { RunArtifacts } from './runtime'
 
@@ -33,7 +34,7 @@ interface ApiRunResult {
     rows?: Record<string, string | number | boolean | null>[]
     cellId?: string
   } | null
-  env?: { name: string; kind: string; preview: string }[]
+  env?: { name: string; kind: string; preview: string; detail?: unknown }[]
   error?: string
 }
 
@@ -86,11 +87,15 @@ function toArtifacts(raw: ApiRunResult, cellId: string): RunArtifacts {
   }
 
   const env: EnvBinding[] = Array.isArray(raw.env)
-    ? raw.env.map((item) => ({
-        name: String(item.name),
-        kind: normalizeKind(item.kind),
-        preview: String(item.preview),
-      }))
+    ? raw.env.map((item) => {
+        const detail = normalizeEnvDetail(item.detail)
+        return {
+          name: String(item.name),
+          kind: normalizeKind(item.kind),
+          preview: String(item.preview),
+          ...(detail ? { detail } : {}),
+        }
+      })
     : []
 
   return {

@@ -2,6 +2,8 @@ export interface KernelEnvBinding {
   name: string
   kind: string
   preview: string
+  /** Truncated contents for Environment inline preview (from snapshot_env). */
+  detail?: unknown
 }
 
 export interface KernelPlotPayload {
@@ -73,11 +75,15 @@ export function normalizeResult(msg: Record<string, unknown>): KernelRunResult {
     ? msg.logs.map((line) => String(line))
     : []
   const env = Array.isArray(msg.env)
-    ? (msg.env as KernelEnvBinding[]).map((item) => ({
-        name: String(item.name),
-        kind: String(item.kind),
-        preview: String(item.preview),
-      }))
+    ? (msg.env as KernelEnvBinding[]).map((item) => {
+        const binding: KernelEnvBinding = {
+          name: String(item.name),
+          kind: String(item.kind),
+          preview: String(item.preview),
+        }
+        if (item.detail !== undefined) binding.detail = item.detail
+        return binding
+      })
     : []
 
   let plot: KernelPlotPayload | null = null
