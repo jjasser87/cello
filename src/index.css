@@ -2322,6 +2322,7 @@ html.is-desktop .workspace {
   max-width: 100%;
 }
 
+.panel-preview-tools,
 .flow-preview-tools {
   display: inline-flex;
   align-items: center;
@@ -2343,7 +2344,22 @@ html.is-desktop .workspace {
   color: var(--ink);
 }
 
-.flow-expand-btn {
+.panel-expand-btn {
+  margin-left: 0;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.panel-expand-btn:hover {
+  border-color: var(--wood);
+  color: var(--ink);
+}
+
+.flow-preview-tools .panel-expand-btn {
   margin-left: 0.25rem;
 }
 
@@ -2388,7 +2404,8 @@ html.is-desktop .workspace {
   stroke: var(--wood) !important;
 }
 
-.flow-expand-overlay {
+/* Shared larger-window overlay for Plot / Flow / Data (web + Electron). */
+.panel-expand-overlay {
   position: fixed;
   inset: 0;
   z-index: 80;
@@ -2399,7 +2416,7 @@ html.is-desktop .workspace {
   background: rgba(0, 0, 0, 0.72);
 }
 
-.flow-expand-panel {
+.panel-expand-panel {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
@@ -2412,13 +2429,26 @@ html.is-desktop .workspace {
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
 }
 
-.flow-expand-toolbar {
+.panel-expand-toolbar {
   display: flex;
   align-items: center;
   gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
-.flow-expand-close {
+.panel-expand-title {
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.9rem;
+}
+
+.panel-expand-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.panel-expand-close {
   margin-left: auto;
   padding: 0.22rem 0.65rem;
   font-size: 0.72rem;
@@ -2428,12 +2458,12 @@ html.is-desktop .workspace {
   color: var(--ink-soft);
 }
 
-.flow-expand-close:hover {
+.panel-expand-close:hover {
   border-color: var(--wood);
   color: var(--ink);
 }
 
-.flow-expand-scroll {
+.panel-expand-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -2444,8 +2474,34 @@ html.is-desktop .workspace {
   scrollbar-width: none;
 }
 
-.flow-expand-scroll::-webkit-scrollbar {
+.panel-expand-scroll::-webkit-scrollbar {
   display: none;
+}
+
+.panel-expand-scroll .plot-image.is-expanded {
+  width: auto;
+  max-width: 100%;
+  max-height: calc(90vh - 8rem);
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.panel-expand-scroll .bar-chart.is-expanded {
+  height: min(52vh, 420px);
+}
+
+.panel-expand-scroll .line-chart.is-expanded svg {
+  height: auto;
+  max-height: min(60vh, 520px);
+}
+
+.panel-expand-scroll .table-scroll {
+  overflow: auto;
+  max-height: none;
+  height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .ai-thread {

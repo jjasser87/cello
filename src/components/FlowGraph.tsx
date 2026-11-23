@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { buildFlowGraph, toMermaid } from '../lib/flowGraph'
 import {
   DEFAULT_FLOW_MODE,
@@ -16,6 +15,7 @@ import {
   syncFlowNodeFocusMarks,
 } from '../lib/mermaidRuntime'
 import type { Cell, KernelLanguage } from '../types'
+import { PanelExpandButton, PanelExpandOverlay } from './PanelExpandOverlay'
 
 interface FlowGraphProps {
   cells: Cell[]
@@ -144,15 +144,6 @@ export function FlowGraphView({
     }
   }, [preview, activeCellId, expanded])
 
-  useEffect(() => {
-    if (!expanded) return
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setExpanded(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [expanded])
-
   if (cells.length === 0) {
     return <div className="empty-state">No cells yet. Add one to see Flow.</div>
   }
@@ -238,14 +229,7 @@ export function FlowGraphView({
             <button type="button" onClick={zoomIn} title="Zoom in" aria-label="Zoom in">
               +
             </button>
-            <button
-              type="button"
-              className="flow-expand-btn"
-              onClick={() => setExpanded(true)}
-              title="Expand chart"
-            >
-              Expand
-            </button>
+            <PanelExpandButton onClick={() => setExpanded(true)} title="Expand chart" />
           </div>
 
           <div
@@ -271,46 +255,37 @@ export function FlowGraphView({
         </>
       )}
 
-      {expanded && preview.status === 'ready'
-        ? createPortal(
-            <div className="flow-expand-overlay" role="dialog" aria-modal="true" aria-label="Expanded Flow chart">
-              <div className="flow-expand-panel">
-                <div className="flow-expand-toolbar">
-                  <span className="mono muted small">
-                    {custom && !preview.usedFallback ? 'custom' : 'auto'} · Mermaid
-                  </span>
-                  <div className="flow-preview-tools">
-                    <button type="button" onClick={zoomOut} aria-label="Zoom out">
-                      −
-                    </button>
-                    <button type="button" onClick={zoomReset} aria-label="Reset zoom">
-                      {Math.round(zoom * 100)}%
-                    </button>
-                    <button type="button" onClick={zoomIn} aria-label="Zoom in">
-                      +
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="flow-expand-close"
-                    onClick={() => setExpanded(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-                <div className="flow-expand-scroll">
-                  <div
-                    ref={expandHostRef}
-                    className="flow-mermaid-host"
-                    style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-                    dangerouslySetInnerHTML={{ __html: preview.svg }}
-                  />
-                </div>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+      {expanded && preview.status === 'ready' ? (
+        <PanelExpandOverlay
+          label="Expanded Flow chart"
+          title={
+            <span className="mono muted small">
+              {custom && !preview.usedFallback ? 'custom' : 'auto'} · Mermaid
+            </span>
+          }
+          toolbar={
+            <div className="flow-preview-tools">
+              <button type="button" onClick={zoomOut} aria-label="Zoom out">
+                −
+              </button>
+              <button type="button" onClick={zoomReset} aria-label="Reset zoom">
+                {Math.round(zoom * 100)}%
+              </button>
+              <button type="button" onClick={zoomIn} aria-label="Zoom in">
+                +
+              </button>
+            </div>
+          }
+          onClose={() => setExpanded(false)}
+        >
+          <div
+            ref={expandHostRef}
+            className="flow-mermaid-host"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+            dangerouslySetInnerHTML={{ __html: preview.svg }}
+          />
+        </PanelExpandOverlay>
+      ) : null}
     </div>
   )
 }

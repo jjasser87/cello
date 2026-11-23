@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
+import { PanelExpandButton, PanelExpandOverlay } from '../PanelExpandOverlay'
 import { diffLines } from '../../lib/diff'
 import {
   detailFromPreview,
@@ -10,7 +11,7 @@ import {
 import { formatPanelTimestamp } from '../../lib/formatTimestamp'
 import { useOverflowFade } from '../../hooks/useOverflowFade'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { EnvBinding, EnvDetail, PanelId } from '../../types'
+import type { DataTable, EnvBinding, EnvDetail, PanelId, PlotSpec } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
 import { FilesPanel } from './FilesPanel'
 
@@ -310,8 +311,25 @@ function HistoryPanel({ api }: SidePanelProps) {
   )
 }
 
+function PlotVisual({ plot, large = false }: { plot: PlotSpec; large?: boolean }) {
+  if (plot.kind === 'image' && plot.imageData) {
+    return (
+      <img
+        className={`plot-image${large ? ' is-expanded' : ''}`}
+        src={plot.imageData}
+        alt={plot.title}
+      />
+    )
+  }
+  if (plot.kind === 'line') {
+    return <LineChart plot={plot} large={large} />
+  }
+  return <BarChart plot={plot} large={large} />
+}
+
 function PlotPanel({ api }: SidePanelProps) {
   const { state, setActivePlotId, revertPlotHistory } = api
+  const [expanded, setExpanded] = useState(false)
   const cellPlots = state.plots.filter((item) => item.cellId === state.activeCellId)
   const plot =
     cellPlots.find((item) => item.id === state.activePlotId) ??
@@ -376,13 +394,11 @@ function PlotPanel({ api }: SidePanelProps) {
         </button>
       </div>
 
-      {plot.kind === 'image' && plot.imageData ? (
-        <img className="plot-image" src={plot.imageData} alt={plot.title} />
-      ) : plot.kind === 'line' ? (
-        <LineChart plot={plot} />
-      ) : (
-        <BarChart plot={plot} />
-      )}
+      <div className="panel-preview-tools">
+        <PanelExpandButton onClick={() => setExpanded(true)} title="Open plot in larger window" />
+      </div>
+
+      <PlotVisual plot={plot} />
 
       {cellPlots.length > 1 ? (
         <ul className="panel-run-list" aria-label="Plots for this cell">
@@ -409,14 +425,60 @@ function PlotPanel({ api }: SidePanelProps) {
             })}
         </ul>
       ) : null}
+
+      {expanded ? (
+        <PanelExpandOverlay
+          label="Expanded Plot"
+          title={
+            <span>
+              <strong>{plot.title}</strong>
+              <span className="muted small">
+                {' '}
+                · Plot {localIndex + 1} / {cellPlots.length}
+              </span>
+            </span>
+          }
+          toolbar={
+            <div className="flow-preview-tools">
+              <button
+                type="button"
+                onClick={() => {
+                  const prev = cellPlots[localIndex - 1]
+                  if (prev) setActivePlotId(prev.id)
+                }}
+                disabled={localIndex <= 0}
+                aria-label="Previous plot"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = cellPlots[localIndex + 1]
+                  if (next) setActivePlotId(next.id)
+                }}
+                disabled={localIndex >= cellPlots.length - 1}
+                aria-label="Next plot"
+              >
+                →
+              </button>
+            </div>
+          }
+          onClose={() => setExpanded(false)}
+        >
+          <PlotVisual plot={plot} large />
+        </PanelExpandOverlay>
+      ) : null}
     </div>
   )
 }
 
 function BarChart({
   plot,
+  large = false,
 }: {
   plot: { title: string; labels: string[]; values: number[] }
+  large?: boolean
 }) {
   const max = Math.max(0, ...plot.values)
   const min = Math.min(0, ...plot.values)
@@ -424,7 +486,11 @@ function BarChart({
   const zeroRatio = (max - 0) / span
 
   return (
-    <div className="bar-chart has-baseline" role="img" aria-label={plot.title}>
+    <div
+      className={`bar-chart has-baseline${large ? ' is-expanded' : ''}`}
+      role="img"
+      aria-label={plot.title}
+    >
       {plot.labels.map((label, index) => {
         const value = plot.values[index] ?? 0
         const height = `${(Math.abs(value) / span) * 100}%`
@@ -453,12 +519,14 @@ function BarChart({
 
 function LineChart({
   plot,
+  large = false,
 }: {
   plot: { title: string; labels: string[]; values: number[] }
+  large?: boolean
 }) {
-  const width = 320
-  const height = 180
-  const pad = 16
+  const width = large ? 960 : 320
+  const height = large ? 520 : 180
+  const pad = large ? 28 : 16
   const max = Math.max(0, ...plot.values)
   const min = Math.min(0, ...plot.values)
   const span = max - min || 1
@@ -472,8 +540,12 @@ function LineChart({
   })
 
   return (
-    <div className="line-chart" role="img" aria-label={plot.title}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="180">
+    <div
+      className={`line-chart${large ? ' is-expanded' : ''}`}
+      role="img"
+      aria-label={plot.title}
+    >
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={large ? undefined : 180}>
         <line
           x1={pad}
           x2={width - pad}
@@ -665,8 +737,34 @@ function EnvDetailView({ binding, detail }: { binding: EnvBinding; detail: EnvDe
   }
 }
 
+function DataTableView({ table }: { table: DataTable }) {
+  return (
+    <div className="table-scroll">
+      <table className="data-table">
+        <thead>
+          <tr>
+            {table.columns.map((col) => (
+              <th key={col}>{col}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((row, index) => (
+            <tr key={index}>
+              {table.columns.map((col) => (
+                <td key={col}>{formatCell(row[col])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function DataPanel({ api }: SidePanelProps) {
   const { state, setActiveTableId, revertTableHistory } = api
+  const [expanded, setExpanded] = useState(false)
   const cellTables = state.tables.filter((item) => item.cellId === state.activeCellId)
   const table =
     cellTables.find((item) => item.id === state.activeTableId) ??
@@ -731,6 +829,10 @@ function DataPanel({ api }: SidePanelProps) {
         </button>
       </div>
 
+      <div className="panel-preview-tools">
+        <PanelExpandButton onClick={() => setExpanded(true)} title="Open table in larger window" />
+      </div>
+
       {cellTables.length > 1 ? (
         <ul className="panel-run-list" aria-label="Tables for this cell">
           {cellTables
@@ -759,26 +861,52 @@ function DataPanel({ api }: SidePanelProps) {
         </ul>
       ) : null}
 
-      <div className="table-scroll">
-        <table className="data-table">
-          <thead>
-            <tr>
-              {table.columns.map((col) => (
-                <th key={col}>{col}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {table.rows.map((row, index) => (
-              <tr key={index}>
-                {table.columns.map((col) => (
-                  <td key={col}>{formatCell(row[col])}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTableView table={table} />
+
+      {expanded ? (
+        <PanelExpandOverlay
+          label="Expanded Data table"
+          title={
+            <span>
+              <strong>{table.name}</strong>
+              <span className="muted small">
+                {' '}
+                · {table.rows.length}×{table.columns.length} · Table {localIndex + 1} /{' '}
+                {cellTables.length}
+              </span>
+            </span>
+          }
+          toolbar={
+            <div className="flow-preview-tools">
+              <button
+                type="button"
+                onClick={() => {
+                  const prev = cellTables[localIndex - 1]
+                  if (prev) setActiveTableId(prev.id)
+                }}
+                disabled={localIndex <= 0}
+                aria-label="Previous table"
+              >
+                ←
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = cellTables[localIndex + 1]
+                  if (next) setActiveTableId(next.id)
+                }}
+                disabled={localIndex >= cellTables.length - 1}
+                aria-label="Next table"
+              >
+                →
+              </button>
+            </div>
+          }
+          onClose={() => setExpanded(false)}
+        >
+          <DataTableView table={table} />
+        </PanelExpandOverlay>
+      ) : null}
     </div>
   )
 }
