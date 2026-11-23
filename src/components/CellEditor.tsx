@@ -59,23 +59,36 @@ export function CellEditor({
   sidePanel,
 }: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
+  const highlightRef = useRef<HTMLPreElement>(null)
   const frameRef = useRef<HTMLElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestGen = useRef(0)
   const [popup, setPopup] = useState<PopupState | null>(null)
 
   useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    el.style.height = 'auto'
-    // Grow with content; CSS min-height keeps the ribbon track fully visible (no inner scroll).
-    el.style.height = `${Math.max(el.scrollHeight, 220)}px`
-  }, [cell.code, cell.id])
-
-  useEffect(() => {
     // Keep the writing surface focused after jumping cells via nav / shortcuts.
     ref.current?.focus({ preventScroll: true })
+    // Reset dual-layer scroll so a tall previous cell does not leave the highlight offset.
+    const el = ref.current
+    const hi = highlightRef.current
+    if (el) {
+      el.scrollTop = 0
+      el.scrollLeft = 0
+    }
+    if (hi) {
+      hi.scrollTop = 0
+      hi.scrollLeft = 0
+    }
   }, [cell.id])
+
+  /** Keep the highlight layer lined up when the textarea scrolls (vertical or horizontal). */
+  const syncHighlightScroll = () => {
+    const el = ref.current
+    const hi = highlightRef.current
+    if (!el || !hi) return
+    hi.scrollTop = el.scrollTop
+    hi.scrollLeft = el.scrollLeft
+  }
 
   useEffect(() => {
     return () => {
@@ -283,6 +296,7 @@ export function CellEditor({
         <main className="main-window" ref={frameRef}>
           <div className="code-surface">
             <pre
+              ref={highlightRef}
               className="code-highlight"
               aria-hidden="true"
               dangerouslySetInnerHTML={{ __html: highlighted }}
@@ -297,6 +311,7 @@ export function CellEditor({
               aria-autocomplete={language === 'r' ? 'list' : undefined}
               aria-controls={visiblePopup ? 'r-completion-list' : undefined}
               aria-expanded={language === 'r' ? Boolean(visiblePopup) : undefined}
+              onScroll={syncHighlightScroll}
               onChange={(event) => {
                 onChange(event.target.value)
                 if (language !== 'r') {

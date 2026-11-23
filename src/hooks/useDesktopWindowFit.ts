@@ -10,15 +10,16 @@ export type DesktopFitLayoutKey = {
   activePanel: string
   helperDock: string
   cellId: string
-  codeLength: number
 }
 
 /**
  * In the Electron shell, keep the OS window content size matched to the
- * editor cluster. Web (`npm run dev`) is unchanged.
+ * editor cluster. Remeasures when helper panels open/close or dock side
+ * changes — not when editor source grows (overflow scrolls inside the cell).
+ * Web (`npm run dev`) is unchanged.
  */
 export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
-  const { sidePanelOpen, activePanel, helperDock, cellId, codeLength } = layout
+  const { sidePanelOpen, activePanel, helperDock, cellId } = layout
 
   useEffect(() => {
     const api = getDesktopApi()
@@ -65,8 +66,8 @@ export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
     if (lane && observer) observer.observe(lane)
 
     // Do not remasure on window resize. OS maximize / manual resize only
-    // changes empty space around the pinned cluster; hugging tracks content
-    // via ResizeObserver so helpers/menus keep their dock geometry.
+    // changes empty space around the pinned cluster; hugging tracks helpers
+    // via ResizeObserver so menus keep their dock geometry.
 
     return () => {
       disposed = true
@@ -74,5 +75,5 @@ export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
       window.clearTimeout(afterAnim)
       observer?.disconnect()
     }
-  }, [sidePanelOpen, activePanel, helperDock, cellId, codeLength])
+  }, [sidePanelOpen, activePanel, helperDock, cellId])
 }

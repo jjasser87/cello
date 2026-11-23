@@ -38,6 +38,7 @@
     "test:settings": "node --experimental-strip-types --test src/lib/settings.test.ts",
     "test:overflow": "node --experimental-strip-types --test src/lib/overflow.test.ts",
     "test:data-table-layout": "node --experimental-strip-types --test src/lib/dataTableLayout.test.ts",
+    "test:editor-scroll-layout": "node --experimental-strip-types --test src/lib/editorScrollLayout.test.ts",
     "test:env-preview": "node --experimental-strip-types --test src/lib/envPreview.test.ts",
     "test:format-timestamp": "node --experimental-strip-types --test src/lib/formatTimestamp.test.ts",
     "test:run-artifacts": "node --experimental-strip-types --test src/lib/runArtifacts.test.ts",
@@ -45,7 +46,7 @@
     "test:folder-save-writes": "node --experimental-strip-types --test src/lib/folderSaveWrites.test.ts",
     "test:folder-sidecar": "node --experimental-strip-types --test src/lib/folderSidecar.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:editor-scroll-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
   },
   "dependencies": {
     "react": "^19.3.1",

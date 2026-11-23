@@ -18,12 +18,12 @@ export default function App() {
   const openProjectInputRef = useRef<HTMLInputElement>(null)
 
   // Electron: hug the editor cluster; grow/shrink when ribbon panels toggle.
+  // Editor content overflow scrolls inside the cell — do not remasure on typing.
   useDesktopWindowFit({
     sidePanelOpen: state.sidePanelOpen,
     activePanel: state.activePanel,
     helperDock: state.helperDock,
     cellId: activeCell.id,
-    codeLength: activeCell.code.length,
   })
 
   const closePalette = useCallback(() => setPaletteOpen(false), [])
