@@ -116,6 +116,39 @@ describe('truncateCellSeries / revert', () => {
     )
   })
 
+  it('keeps the selected entry when it is the oldest (no empty-series off-by-one)', () => {
+    const items = [
+      { id: 'a1', cellId: 'a', timestamp: 1 },
+      { id: 'a2', cellId: 'a', timestamp: 2 },
+      { id: 'a3', cellId: 'a', timestamp: 3 },
+    ]
+    const next = truncateCellSeries(items, 'a', 'a1')
+    assert.deepEqual(
+      next.map((i) => i.id),
+      ['a1'],
+    )
+    assert.ok(next.some((i) => i.id === 'a1'), 'must retain keepId (exclusive slice would wipe the series)')
+  })
+
+  it('newest-first series still keeps chronological priors through keepId', () => {
+    // Regression: array-order slice(0, keepIndex+1) on newest-first data keeps
+    // newer entries and drops older ones — deleting history before the selection.
+    const items = [
+      { id: 'a3', cellId: 'a', timestamp: 3 },
+      { id: 'b2', cellId: 'b', timestamp: 3 },
+      { id: 'a2', cellId: 'a', timestamp: 2 },
+      { id: 'b1', cellId: 'b', timestamp: 2 },
+      { id: 'a1', cellId: 'a', timestamp: 1 },
+    ]
+    const next = truncateCellSeries(items, 'a', 'a2')
+    assert.deepEqual(
+      next.map((i) => i.id),
+      ['b2', 'a2', 'b1', 'a1'],
+    )
+    assert.ok(next.some((i) => i.id === 'a1'), 'must keep entries before the selected point')
+    assert.ok(!next.some((i) => i.id === 'a3'), 'must drop strictly newer entries')
+  })
+
   it('applyCodeHistoryRevert restores code and truncates forward + linked plots', () => {
     const cells = [
       cell({ id: 'c1', name: 'A', code: 'latest' }),
@@ -198,6 +231,71 @@ describe('truncateCellSeries / revert', () => {
       ['p1'],
     )
     assert.equal(next.activePlotId, 'p1')
+  })
+
+  it('applyCodeHistoryRevert mid-series keeps priors and other cells', () => {
+    const cells = [
+      cell({ id: 'c1', name: 'A', code: 'v3' }),
+      cell({ id: 'c2', name: 'B', code: 'x' }),
+    ]
+    const history: HistoryEntry[] = [
+      {
+        id: 'h1',
+        cellId: 'c1',
+        cellName: 'A',
+        code: 'v1',
+        previousCode: '',
+        timestamp: 1,
+        status: 'ok',
+      },
+      {
+        id: 'h2',
+        cellId: 'c2',
+        cellName: 'B',
+        code: 'x',
+        previousCode: '',
+        timestamp: 2,
+        status: 'ok',
+      },
+      {
+        id: 'h3',
+        cellId: 'c1',
+        cellName: 'A',
+        code: 'v2',
+        previousCode: 'v1',
+        timestamp: 3,
+        status: 'ok',
+      },
+      {
+        id: 'h4',
+        cellId: 'c1',
+        cellName: 'A',
+        code: 'v3',
+        previousCode: 'v2',
+        timestamp: 4,
+        status: 'ok',
+      },
+    ]
+    const next = applyCodeHistoryRevert(
+      {
+        cells,
+        history,
+        plots: [],
+        tables: [],
+        consoleEntries: [],
+        activePlotId: null,
+        activeTableId: null,
+        activeConsoleId: null,
+      },
+      'h3',
+    )
+    assert.ok(next)
+    assert.equal(next.cells[0].code, 'v2')
+    assert.deepEqual(
+      next.history.map((h) => h.id),
+      ['h1', 'h2', 'h3'],
+    )
+    assert.equal(next.historyIndex, 2)
   })
 
   it('applyTypedHistoryRevert truncates plot series and restores stamped code', () => {
