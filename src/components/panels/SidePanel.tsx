@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
+import { useOverflowFade } from '../../hooks/useOverflowFade'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { PanelId } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
@@ -26,8 +27,10 @@ interface SidePanelProps {
 export function SidePanel({ api }: SidePanelProps) {
   const { state, toggleSidePanel, collapseSidePanel } = api
   const open = state.sidePanelOpen
+  const bodyRef = useRef<HTMLDivElement>(null)
 
   const isFlow = open && state.activePanel === 'structure'
+  const moreBelow = useOverflowFade(bodyRef)
 
   return (
     <aside
@@ -46,17 +49,26 @@ export function SidePanel({ api }: SidePanelProps) {
       >
         <div className="side-panel">
           <PanelHeader panel={state.activePanel} onCollapse={collapseSidePanel} />
-          <div className={`side-panel-body${isFlow ? ' is-flow' : ''}`}>
-            {state.activePanel === 'cells' && <CellsPanel api={api} />}
-            {state.activePanel === 'explain' && <ExplainPanel api={api} />}
-            {state.activePanel === 'history' && <HistoryPanel api={api} />}
-            {state.activePanel === 'plot' && <PlotPanel api={api} />}
-            {state.activePanel === 'files' && <FilesPanel api={api} />}
-            {state.activePanel === 'env' && <EnvPanel api={api} />}
-            {state.activePanel === 'data' && <DataPanel api={api} />}
-            {state.activePanel === 'structure' && <StructurePanel api={api} />}
-            {state.activePanel === 'console' && <ConsolePanel api={api} />}
-            {state.activePanel === 'ai' && <AiPanel api={api} />}
+          <div
+            className="side-panel-scroll"
+            data-more-below={moreBelow ? 'true' : 'false'}
+          >
+            <div
+              ref={bodyRef}
+              className={`side-panel-body${isFlow ? ' is-flow' : ''}`}
+            >
+              {state.activePanel === 'cells' && <CellsPanel api={api} />}
+              {state.activePanel === 'explain' && <ExplainPanel api={api} />}
+              {state.activePanel === 'history' && <HistoryPanel api={api} />}
+              {state.activePanel === 'plot' && <PlotPanel api={api} />}
+              {state.activePanel === 'files' && <FilesPanel api={api} />}
+              {state.activePanel === 'env' && <EnvPanel api={api} />}
+              {state.activePanel === 'data' && <DataPanel api={api} />}
+              {state.activePanel === 'structure' && <StructurePanel api={api} />}
+              {state.activePanel === 'console' && <ConsolePanel api={api} />}
+              {state.activePanel === 'ai' && <AiPanel api={api} />}
+            </div>
+            <div className="side-panel-fade" aria-hidden="true" />
           </div>
         </div>
       </div>
@@ -580,40 +592,11 @@ function DataPanel({ api }: SidePanelProps) {
 
 function StructurePanel({ api }: SidePanelProps) {
   const { state, selectCell } = api
-  const rootRef = useRef<HTMLDivElement>(null)
 
-  // Flow prefers page scroll: grow the cell frame to fit the graph so the
-  // side panel does not need a nested scrollbar/slider.
-  useLayoutEffect(() => {
-    const root = rootRef.current
-    if (!root) return
-    const lane = root.closest('.workspace-lane')
-    if (!(lane instanceof HTMLElement)) return
-
-    const apply = () => {
-      const panel = root.closest('.side-panel')
-      const header = panel?.querySelector('.panel-header')
-      const body = root.closest('.side-panel-body')
-      const headerH = header instanceof HTMLElement ? header.offsetHeight : 0
-      const bodyStyle = body instanceof HTMLElement ? getComputedStyle(body) : null
-      const padY = bodyStyle
-        ? (parseFloat(bodyStyle.paddingTop) || 0) + (parseFloat(bodyStyle.paddingBottom) || 0)
-        : 0
-      const needed = Math.ceil(headerH + padY + root.scrollHeight)
-      lane.style.setProperty('--flow-frame-min', `${needed}px`)
-    }
-
-    apply()
-    const ro = new ResizeObserver(apply)
-    ro.observe(root)
-    return () => {
-      ro.disconnect()
-      lane.style.removeProperty('--flow-frame-min')
-    }
-  }, [state.cells, state.language, state.activeCellId, state.scriptPath])
-
+  // Flow stays inside the fixed helper panel and scrolls there (with fade cue),
+  // rather than growing the editor frame when the graph is tall.
   return (
-    <div className="structure-panel" ref={rootRef}>
+    <div className="structure-panel">
       <div className="structure-file">
         <span className="mono">{state.scriptPath}</span>
       </div>

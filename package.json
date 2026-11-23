@@ -35,8 +35,9 @@
     "test:panel-restore": "node --experimental-strip-types --test src/lib/panelRestore.test.ts",
     "test:desktop": "node --experimental-strip-types --test src/lib/desktop.test.ts",
     "test:settings": "node --experimental-strip-types --test src/lib/settings.test.ts",
+    "test:overflow": "node --experimental-strip-types --test src/lib/overflow.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow"
   },
   "dependencies": {
     "react": "^19.3.1",
