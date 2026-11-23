@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
+import { formatPanelTimestamp } from '../../lib/formatTimestamp'
 import { useOverflowFade } from '../../hooks/useOverflowFade'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { PanelId } from '../../types'
@@ -204,7 +205,7 @@ function HistoryPanel({ api }: SidePanelProps) {
           <strong>{entry.cellName}</strong>
           <div className="muted">
             Code {localIndex + 1} / {cellHistory.length} ·{' '}
-            {new Date(entry.timestamp).toLocaleTimeString()}
+            {formatPanelTimestamp(entry.timestamp)}
             {entry.status === 'error' ? ' · error' : ''}
           </div>
           <p className="muted small history-restore-hint">
@@ -255,7 +256,7 @@ function HistoryPanel({ api }: SidePanelProps) {
                     <span className="panel-run-meta">
                       <span className="mono">#{itemLocal + 1}</span>
                       <span className="muted">
-                        {new Date(item.timestamp).toLocaleTimeString()}
+                        {formatPanelTimestamp(item.timestamp)}
                       </span>
                       {item.status === 'error' ? (
                         <span className="history-run-error">err</span>
@@ -337,7 +338,7 @@ function PlotPanel({ api }: SidePanelProps) {
           <strong>{plot.title}</strong>
           <div className="muted">
             Plot {localIndex + 1} / {cellPlots.length} ·{' '}
-            {new Date(plot.createdAt).toLocaleTimeString()}
+            {formatPanelTimestamp(plot.createdAt)}
           </div>
           <p className="muted small history-restore-hint">
             Browse restores the code. Revert also deletes newer plots.
@@ -552,7 +553,7 @@ function DataPanel({ api }: SidePanelProps) {
           <strong>{table.name}</strong>
           <div className="muted">
             Table {localIndex + 1} / {cellTables.length} · {table.rows.length} rows ·{' '}
-            {table.columns.length} cols · {new Date(table.createdAt).toLocaleTimeString()}
+            {table.columns.length} cols · {formatPanelTimestamp(table.createdAt)}
           </div>
           <p className="muted small history-restore-hint">
             Browse restores the code. Revert also deletes newer tables.
@@ -744,7 +745,7 @@ function ConsolePanel({ api }: SidePanelProps) {
           <strong>Console run</strong>
           <div className="muted">
             Run {localIndex + 1} / {cellRuns.length} ·{' '}
-            {new Date(entry.timestamp).toLocaleTimeString()}
+            {formatPanelTimestamp(entry.timestamp)}
             {entry.status === 'error' ? ' · error' : ''}
           </div>
           <p className="muted small history-restore-hint">
@@ -794,7 +795,7 @@ function ConsolePanel({ api }: SidePanelProps) {
                     <span className="panel-run-meta">
                       <span className="mono">#{itemLocal + 1}</span>
                       <span className="muted">
-                        {new Date(item.timestamp).toLocaleTimeString()}
+                        {formatPanelTimestamp(item.timestamp)}
                       </span>
                       {item.status === 'error' ? (
                         <span className="history-run-error">err</span>
