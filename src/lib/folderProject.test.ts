@@ -5,12 +5,16 @@ import {
   MANIFEST_NAME,
   PROJECT_VERSION_FOLDER,
   createFolderManifest,
+  isKernelSourcePath,
   parseFolderManifest,
+  planScriptSourcePath,
+  resolveScriptMirrorPath,
   serializeFolderManifest,
   stringifyFolderManifest,
   folderManifestAsV1,
 } from './folderProject.ts'
 import { PROJECT_FORMAT } from './projectFile.ts'
+import { cellsToScript } from './script.ts'
 
 describe('folder project (structure B)', () => {
   it('creates a lean v2 manifest without a fake files tree', () => {
@@ -55,6 +59,33 @@ describe('folder project (structure B)', () => {
     assert.equal(parsed.project.cells[0].code, 'x <- 1')
     assert.equal(parsed.project.cells[0].name, 'Load')
     assert.equal(parsed.project.artifactsDir, ARTIFACTS_DIR)
+  })
+
+  it('plans R script mirror path + cellsToScript contents for Save (regression)', () => {
+    const cells = [
+      { name: 'Load', code: 'x <- 1:3' },
+      { name: 'Plot', code: 'plot(x)' },
+    ]
+    const relativePath = planScriptSourcePath({
+      language: 'r',
+      scriptPath: 'analysis.R',
+    })
+    const contents = cellsToScript(cells, 'r')
+    assert.equal(relativePath, 'analysis.R')
+    assert.match(contents, /# %% Load/)
+    assert.match(contents, /x <- 1:3/)
+    assert.match(contents, /# %% Plot/)
+    assert.match(contents, /plot\(x\)/)
+  })
+
+  it('resolves script mirror path without overwriting non-source or sidecar paths', () => {
+    assert.equal(resolveScriptMirrorPath('analysis.R', 'r'), 'analysis.R')
+    assert.equal(resolveScriptMirrorPath('src/load.r', 'r'), 'src/load.r')
+    assert.equal(resolveScriptMirrorPath('data/sales.csv', 'r'), 'analysis.R')
+    assert.equal(resolveScriptMirrorPath(MANIFEST_NAME, 'r'), 'analysis.R')
+    assert.equal(resolveScriptMirrorPath('.cello/ui.json', 'r'), 'analysis.R')
+    assert.equal(isKernelSourcePath('analysis.R', 'r'), true)
+    assert.equal(isKernelSourcePath('notes.txt', 'r'), false)
   })
 
   it('migrates v1 .cello documents into v2 folder shape', () => {

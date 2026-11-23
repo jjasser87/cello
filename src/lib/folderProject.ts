@@ -1,8 +1,10 @@
 /**
  * Folder-as-project (structure B): lean `cello.json` + `.cello/` sidecar.
  *
- * Code primary lives in the manifest. Run artifacts under `.cello/runs` are
- * opt-in. Polyglot multi-kernel cells are future-only — one `language` per project.
+ * Code primary lives in the manifest. On Save we also mirror cell sources into
+ * a real kernel file (e.g. `analysis.R`) so the File panel / disk stay in sync.
+ * Run artifacts under `.cello/runs` are opt-in. Polyglot multi-kernel cells are
+ * future-only — one `language` per project.
  */
 import type { KernelLanguage, PanelId, ProjectMeta } from '../types.ts'
 import {
@@ -23,6 +25,12 @@ function createId(prefix: string): string {
 
 function defaultScriptPath(language: KernelLanguage): string {
   return language === 'r' ? 'analysis.R' : 'analysis.js'
+}
+
+/** Kernel source extensions — adapters add rows here; layout stays language-agnostic. */
+const SOURCE_EXTENSIONS: Record<KernelLanguage, readonly string[]> = {
+  r: ['.R', '.r'],
+  javascript: ['.js', '.mjs', '.cjs'],
 }
 
 function starterCells(language: KernelLanguage): PersistedCell[] {
@@ -146,6 +154,56 @@ export function serializeFolderManifest(
 
 export function stringifyFolderManifest(project: CelloProjectV2): string {
   return `${JSON.stringify(project, null, 2)}\n`
+}
+
+function normalizeRelPath(relativePath: string): string {
+  return relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+/** True when `relativePath` looks like a kernel source file for `language`. */
+export function isKernelSourcePath(
+  relativePath: string,
+  language: KernelLanguage,
+): boolean {
+  const base = normalizeRelPath(relativePath).split('/').pop() ?? ''
+  if (!base || base === MANIFEST_NAME) return false
+  const lower = base.toLowerCase()
+  return SOURCE_EXTENSIONS[language].some((ext) => lower.endsWith(ext.toLowerCase()))
+}
+
+/**
+ * Where Save should mirror cell sources on disk.
+ * Prefers the active `scriptPath` when it is a kernel source file; otherwise the
+ * language default (`analysis.R` / `analysis.js`). Never targets the manifest or sidecar.
+ */
+export function resolveScriptMirrorPath(
+  scriptPath: string,
+  language: KernelLanguage,
+): string {
+  const normalized = normalizeRelPath(scriptPath)
+  if (
+    !normalized ||
+    normalized === MANIFEST_NAME ||
+    normalized === SIDECAR_DIR ||
+    normalized.startsWith(`${SIDECAR_DIR}/`)
+  ) {
+    return defaultScriptPath(language)
+  }
+  if (isKernelSourcePath(normalized, language)) {
+    return normalized
+  }
+  return defaultScriptPath(language)
+}
+
+/**
+ * Relative path for the real on-disk source file written alongside lean `cello.json`.
+ * Callers supply contents via `cellsToScript` (same as Export).
+ */
+export function planScriptSourcePath(state: {
+  language: KernelLanguage
+  scriptPath: string
+}): string {
+  return resolveScriptMirrorPath(state.scriptPath, state.language)
 }
 
 /**
