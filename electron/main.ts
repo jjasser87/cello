@@ -19,6 +19,7 @@ import { createReadStream } from 'node:fs'
 import { access, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CELLO_CONTENT_SECURITY_POLICY } from '../src/lib/cspPolicy.ts'
 import { createKernelSession, type KernelSession } from '../server/rKernelHost.ts'
 
 const MANIFEST_NAME = 'cello.json'
@@ -157,6 +158,10 @@ async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<voi
   // Local desktop host: never cache UI bundles. A rebuild + reload must pick up
   // Save/path fixes immediately (max-age left users on a stale Save that skipped .R).
   res.setHeader('Cache-Control', 'no-store')
+  // Mermaid SVG uses inline styles; keep style-src able to accept them.
+  if (ext === '.html') {
+    res.setHeader('Content-Security-Policy', CELLO_CONTENT_SECURITY_POLICY)
+  }
   createReadStream(target).pipe(res)
 }
 

@@ -4,6 +4,15 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/cello-logo.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Production Electron also sets this header on HTML responses.
+      style-src includes 'unsafe-inline' so Mermaid SVG inline styles render.
+      Vite `npm run dev` does not enforce this meta (HMR); desktop host does.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self' ws: wss:; worker-src 'self' blob:; base-uri 'self'; form-action 'self'; object-src 'none'"
+    />
     <meta
       name="description"
       content="Cello — a minimalist, cell-based development environment. One cell. Full focus."
