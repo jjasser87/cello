@@ -104,7 +104,7 @@ npm run desktop:app
 
 By default the desktop window is **frameless** (`frame: false`) with native overlay min/max/close, and the outer size hugs the editor cell (expanding when a ribbon panel opens). Restore the normal OS frame with `CELLO_NATIVE_FRAME=1`.
 
-Helper ribbon panels dock on the **left** of the editor by default (expand leftward). Change the side under **Settings…** in the command palette (`Helper dock`: left / right / top / bottom).
+Helper ribbon panels dock on the **right** of the editor by default (expand rightward). Change the side under **Settings…** in the command palette (`Helper dock`: right / left / top / bottom). When helpers dock above, the above-editor menu sits on the right; when helpers dock below, the below menu sits on the right.
 
 ### npm install scripts (Electron / esbuild)
 

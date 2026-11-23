@@ -120,7 +120,7 @@ export interface WorkspaceState {
   activeCellId: string
   activePanel: PanelId
   sidePanelOpen: boolean
-  /** Ribbon helpers dock relative to the editor (app setting; default left). */
+  /** Ribbon helpers dock relative to the editor (app setting; default right). */
   helperDock: HelperDock
   language: KernelLanguage
   kernelStatus: {
