@@ -121,6 +121,89 @@ export function stripNoise(code: string, language: KernelLanguage): string {
   return text
 }
 
+/**
+ * Mask dataframe / list column accessors so the column name is not a free use.
+ * Keeps the object on the left (`df` in `df$salaries`) but blanks the column.
+ *
+ * Handles: `obj$col`, `obj[[col]]` / `obj[["col"]]`, and column slots after a
+ * comma in `[` (`df[, col]`, `df[rows, col]`). Row-index names before a comma
+ * stay (e.g. `df[emp_ids, ]` still uses `emp_ids`).
+ */
+export function maskColumnAccess(code: string, language: KernelLanguage): string {
+  let text = code
+
+  if (language === 'r') {
+    // df$col  /  env$binding — column / member after `$` is not a free variable.
+    text = text.replace(/\$\s*[A-Za-z.][A-Za-z0-9._]*/g, '$ ')
+    // df[[col]] / df[["col"]] (strings already stripped → df[[ ]])
+    text = text.replace(/\[\[[\s\S]*?\]\]/g, '[[ ]]')
+    // Column position in [row, col, ...] — blank identifiers after each comma.
+    text = text.replace(/\[([^\[\]]*)\]/g, (_full, inner: string) => {
+      const blanked = String(inner).replace(
+        /(,\s*)([A-Za-z.][A-Za-z0-9._]*)/g,
+        '$1 ',
+      )
+      return `[${blanked}]`
+    })
+  } else {
+    // obj.col / obj?.col — property reads are not free vars of that name.
+    text = text.replace(/\?\.\s*[A-Za-z_$][\w$]*/g, '?. ')
+    text = text.replace(/\.([A-Za-z_$][\w$]*)/g, '. ')
+    text = text.replace(/\[[\s\S]*?\]/g, '[ ]')
+  }
+
+  return text
+}
+
+const R_NSE_CALLS = [
+  'aes',
+  'mutate',
+  'transmute',
+  'filter',
+  'select',
+  'rename',
+  'summarise',
+  'summarize',
+  'group_by',
+  'arrange',
+  'distinct',
+  'slice',
+] as const
+
+/**
+ * Blank bodies of common R tidy-eval helpers (`aes(...)`, …) where bare
+ * symbols are column names, not workspace objects (ggplot2 / dplyr NSE).
+ */
+export function maskNseCalls(code: string): string {
+  const pattern = new RegExp(`\\b(${R_NSE_CALLS.join('|')})\\s*\\(`, 'g')
+  let text = code
+  const hits: { start: number; open: number; name: string }[] = []
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index ?? 0
+    hits.push({ start, open: start + match[0].length - 1, name: match[1] })
+  }
+  // Rewrite from the end so earlier offsets stay valid.
+  for (let h = hits.length - 1; h >= 0; h--) {
+    const { start, open, name } = hits[h]
+    let depth = 0
+    let close = open
+    for (let j = open; j < text.length; j++) {
+      if (text[j] === '(') depth += 1
+      else if (text[j] === ')') {
+        depth -= 1
+        if (depth === 0) {
+          close = j
+          break
+        }
+      }
+    }
+    if (depth !== 0) continue
+    const blanked = `${name}(${' '.repeat(Math.max(0, close - open - 1))})`
+    text = text.slice(0, start) + blanked + text.slice(close + 1)
+  }
+  return text
+}
+
 export function extractDefs(code: string, language: KernelLanguage): Set<string> {
   const clean = stripNoise(code, language)
   const defs = new Set<string>()
@@ -144,7 +227,11 @@ export function extractDefs(code: string, language: KernelLanguage): Set<string>
 }
 
 export function extractUses(code: string, language: KernelLanguage): Set<string> {
-  const clean = stripNoise(code, language)
+  let clean = stripNoise(code, language)
+  clean = maskColumnAccess(clean, language)
+  if (language === 'r') {
+    clean = maskNseCalls(clean)
+  }
   const uses = new Set<string>()
   const pattern =
     language === 'r'
