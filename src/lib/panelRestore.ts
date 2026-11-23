@@ -9,11 +9,43 @@ export function restoreCellCode(cells: Cell[], cellId: string, sourceCode: strin
   )
 }
 
+type TimedSeriesItem = {
+  id: string
+  cellId: string
+  timestamp?: number
+  createdAt?: number
+}
+
+function seriesTime(item: TimedSeriesItem, fallbackIndex: number): number {
+  if (typeof item.timestamp === 'number') return item.timestamp
+  if (typeof item.createdAt === 'number') return item.createdAt
+  return fallbackIndex
+}
+
+/** True when cell series is oldest→newest (or unknown / flat times). */
+function cellSeriesIsOldestFirst<T extends TimedSeriesItem>(
+  cellItems: T[],
+): boolean {
+  let ascending = 0
+  let descending = 0
+  for (let i = 1; i < cellItems.length; i++) {
+    const prev = seriesTime(cellItems[i - 1], i - 1)
+    const next = seriesTime(cellItems[i], i)
+    if (next > prev) ascending += 1
+    else if (next < prev) descending += 1
+  }
+  // Prefer oldest-first on ties (writers append chronologically).
+  return descending <= ascending
+}
+
 /**
- * Keep this cell's series through `keepId` (inclusive, in array order) and drop
- * every newer entry for that cell. Entries for other cells are unchanged.
+ * Keep this cell's series through `keepId` (inclusive) and drop every newer
+ * entry for that cell. "Newer" follows chronological time when
+ * `timestamp` / `createdAt` are present — including newest-first arrays —
+ * so truncate-forward never deletes priors before the selected point.
+ * Entries for other cells are unchanged.
  */
-export function truncateCellSeries<T extends { id: string; cellId: string }>(
+export function truncateCellSeries<T extends TimedSeriesItem>(
   items: T[],
   cellId: string,
   keepId: string,
@@ -21,7 +53,12 @@ export function truncateCellSeries<T extends { id: string; cellId: string }>(
   const cellItems = items.filter((item) => item.cellId === cellId)
   const keepIndex = cellItems.findIndex((item) => item.id === keepId)
   if (keepIndex < 0) return items
-  const keepIds = new Set(cellItems.slice(0, keepIndex + 1).map((item) => item.id))
+  // Oldest-first: keep [0 .. keepIndex]. Newest-first: keep [keepIndex .. end]
+  // (end holds older entries). Inclusive either way — never empty the keep id.
+  const kept = cellSeriesIsOldestFirst(cellItems)
+    ? cellItems.slice(0, keepIndex + 1)
+    : cellItems.slice(keepIndex)
+  const keepIds = new Set(kept.map((item) => item.id))
   return items.filter((item) => item.cellId !== cellId || keepIds.has(item.id))
 }
 

@@ -240,13 +240,17 @@ function HistoryPanel({ api }: SidePanelProps) {
             .slice()
             .reverse()
             .map((item, reverseIndex) => {
+              // Display is newest-first; itemLocal stays chronological (0 = oldest).
               const itemLocal = cellHistory.length - 1 - reverseIndex
               return (
                 <li key={item.id}>
                   <button
                     type="button"
                     className={item.id === entry.id ? 'is-active' : ''}
-                    onClick={() => goToLocal(itemLocal)}
+                    onClick={() => {
+                      const globalIndex = state.history.findIndex((h) => h.id === item.id)
+                      if (globalIndex >= 0) setHistoryIndex(globalIndex)
+                    }}
                   >
                     <span className="panel-run-meta">
                       <span className="mono">#{itemLocal + 1}</span>
