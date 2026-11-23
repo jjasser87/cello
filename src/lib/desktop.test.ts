@@ -20,4 +20,10 @@ describe('desktop module contract', () => {
     assert.equal(mod.getDesktopApi(), null)
     assert.equal(mod.isDesktopShell(), false)
   })
+
+  it('measureDesktopFitSize is null without a DOM cluster (no viewport fallback)', async () => {
+    const mod = await import('./desktop.ts')
+    // Without .workspace-cluster, hug size must not invent a viewport-based layout.
+    assert.equal(mod.measureDesktopFitSize(), null)
+  })
 })

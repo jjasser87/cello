@@ -250,6 +250,12 @@ function registerWindowIpc() {
       return { ok: false as const }
     }
 
+    // Maximized / fullscreen: leave the OS size alone so empty space grows
+    // around the pinned cell+helper cluster instead of fighting the frame.
+    if (win.isMaximized() || win.isFullScreen()) {
+      return { ok: true as const, width, height, skipped: 'maximized' as const }
+    }
+
     const [curW, curH] = win.getContentSize()
     if (Math.abs(curW - width) > 1 || Math.abs(curH - height) > 1) {
       win.setContentSize(width, height)

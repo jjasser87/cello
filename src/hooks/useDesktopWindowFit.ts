@@ -64,14 +64,15 @@ export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
     const lane = document.querySelector('.workspace-lane')
     if (lane && observer) observer.observe(lane)
 
-    window.addEventListener('resize', schedule)
+    // Do not remasure on window resize. OS maximize / manual resize only
+    // changes empty space around the pinned cluster; hugging tracks content
+    // via ResizeObserver so helpers/menus keep their dock geometry.
 
     return () => {
       disposed = true
       if (raf) cancelAnimationFrame(raf)
       window.clearTimeout(afterAnim)
       observer?.disconnect()
-      window.removeEventListener('resize', schedule)
     }
   }, [sidePanelOpen, activePanel, helperDock, cellId, codeLength])
 }

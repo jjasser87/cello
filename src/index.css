@@ -37,7 +37,8 @@
     (var(--ribbon-pad-y) * 2) + (var(--ribbon-count) * var(--ribbon-item-size)) +
       ((var(--ribbon-count) - 1) * var(--ribbon-gap))
   );
-  --panel-width: min(420px, 46vw);
+  /* Fixed width — never track vw, or resize reflows helper geometry. */
+  --panel-width: 420px;
   /* Fixed height when helpers dock above/below the editor. */
   --panel-height: 280px;
   --ribbon-bar-size: 2.6rem;
@@ -173,10 +174,6 @@ html.is-desktop #root {
   overflow: hidden;
 }
 
-html.is-desktop {
-  --panel-width: 420px;
-}
-
 html.is-desktop .app-shell,
 html.is-desktop .workspace {
   min-height: 0;
@@ -184,9 +181,16 @@ html.is-desktop .workspace {
   overflow: hidden;
 }
 
-html.is-desktop .app-shell {
+/*
+ * Pin the cell+helper cluster; spare window area (maximize / manual resize)
+ * stays empty rather than stretching or restacking chrome.
+ */
+html.is-desktop .app-shell,
+html.is-desktop .workspace,
+html.is-desktop .workspace-cluster,
+html.is-desktop .cell-editor {
   width: max-content;
-  max-width: 100%;
+  max-width: none;
 }
 
 /*
@@ -2049,141 +2053,20 @@ html.is-desktop .app-shell {
   }
 }
 
+/*
+ * Narrow viewports: soften chrome only. Do NOT restack helpers under the
+ * editor or stretch header/nav to full width — dock side and menu placement
+ * are settings, and must stay fixed when the window resizes.
+ */
 @media (max-width: 860px) {
   .workspace {
     padding: 0.65rem 0.75rem 0.85rem;
-  }
-
-  .workspace-cluster {
-    display: flex;
-    width: 100%;
-  }
-
-  .workspace-lane,
-  .workspace.panel-open .workspace-lane {
-    display: flex;
-    flex-direction: column;
-    position: relative;
-    width: 100%;
-    min-height: 0;
-    padding-right: 0;
-  }
-
-  .main-window {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .code-surface {
-    min-height: 220px;
-    border-radius: var(--radius);
-    border-left-color: var(--line);
-    border-right-color: var(--line);
-  }
-
-  .code-area {
-    /* Keep 80ch when possible; allow the page to scroll horizontally if needed. */
-    width: 80ch;
-  }
-
-  .cell-header,
-  .cell-nav,
-  .cell-editor > .cell-error {
-    min-width: 0;
-    width: 100%;
+    /* Cluster may be wider than the viewport; page scrolls instead of reflow. */
+    overflow: auto;
   }
 
   .cell-nav-hint {
     display: none;
-  }
-
-  .cell-header {
-    flex-wrap: wrap;
-  }
-
-  .cell-toolbar {
-    margin-left: 0;
-    width: 100%;
-    justify-content: flex-end;
-  }
-
-  .cell-editor {
-    width: 100%;
-  }
-
-  .side-shell,
-  .side-shell.is-open {
-    position: relative;
-    top: auto;
-    right: auto;
-    bottom: auto;
-    width: 100%;
-    min-height: auto;
-    flex-direction: column;
-    border-left: none;
-    border-top: 1px solid var(--line);
-    border-radius: 0;
-    transition: none;
-  }
-
-  .side-ribbon {
-    flex-direction: row;
-    flex-wrap: wrap;
-    width: 100%;
-    flex: 0 0 auto;
-    height: auto;
-    overflow: visible;
-    border-left: none;
-    border-bottom: 1px solid var(--line);
-    /* Keep the option ribbon above the panel on stacked mobile layout. */
-    order: -1;
-  }
-
-  .side-panel-slot,
-  .side-shell.is-open .side-panel-slot {
-    width: 100%;
-    max-height: 0;
-    opacity: 0;
-    overflow: hidden;
-    transition:
-      max-height var(--panel-motion),
-      opacity calc(var(--panel-duration) * 0.85) var(--panel-ease);
-  }
-
-  .side-shell.is-open .side-panel-slot {
-    max-height: min(52vh, 420px);
-    opacity: 1;
-    overflow: hidden;
-  }
-
-  .side-panel {
-    width: 100%;
-    min-width: 0;
-    min-height: 0;
-    height: 100%;
-    max-height: min(52vh, 420px);
-    border-right: none;
-    transform: none;
-  }
-
-  .side-panel-body {
-    min-height: 0;
-    overflow: auto;
-    scrollbar-width: none;
-  }
-
-  .side-panel-body::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
-
-  /* Stacked Flow: keep wheel overflow without a visible slider. */
-  .side-panel-body.is-flow {
-    overflow: auto;
-  }
-
-  .ribbon-item {
-    min-width: 56px;
   }
 
   .diff-grid {
