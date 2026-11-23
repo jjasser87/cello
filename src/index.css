@@ -2055,6 +2055,17 @@ html.is-desktop .workspace {
 
 .env-table tr.is-selected td {
   background: var(--wood-soft);
+  border-bottom-color: transparent;
+}
+
+.env-table tr.env-preview-row td.env-preview-cell {
+  padding: 0 0.45rem 0.55rem;
+  white-space: normal;
+  max-width: none;
+  overflow: visible;
+  text-overflow: unset;
+  background: var(--wood-soft);
+  border-bottom: 1px solid var(--line);
 }
 
 .env-binding-btn {

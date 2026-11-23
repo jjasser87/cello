@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { PanelExpandButton, PanelExpandOverlay } from '../PanelExpandOverlay'
 import { diffLines } from '../../lib/diff'
@@ -583,13 +583,6 @@ function EnvPanel({ api }: SidePanelProps) {
     return <EmptyState text="Environment is empty. Run cells to populate bindings." />
   }
 
-  const selected = resolvedPreview
-    ? (env.find((binding) => binding.name === resolvedPreview) ?? null)
-    : null
-  const detail =
-    selected?.detail ??
-    (selected ? detailFromPreview(selected.preview, selected.kind) : null)
-
   return (
     <div className="env-panel">
       <table className="data-table env-table">
@@ -603,57 +596,71 @@ function EnvPanel({ api }: SidePanelProps) {
         <tbody>
           {env.map((binding) => {
             const open = binding.name === resolvedPreview
+            const detail = open
+              ? (binding.detail ?? detailFromPreview(binding.preview, binding.kind))
+              : null
             return (
-              <tr
-                key={binding.name}
-                className={open ? 'is-selected' : undefined}
-                data-selected={open ? 'true' : undefined}
-              >
-                <td className="mono">
-                  <button
-                    type="button"
-                    className="env-binding-btn"
-                    aria-expanded={open}
-                    aria-controls={open ? 'env-preview-pane' : undefined}
-                    onClick={() =>
-                      setPreviewName((current) => toggleEnvPreview(current, binding.name))
-                    }
-                  >
-                    {binding.name}
-                  </button>
-                </td>
-                <td>{binding.kind}</td>
-                <td className="mono">{binding.preview}</td>
-              </tr>
+              <Fragment key={binding.name}>
+                <tr
+                  className={open ? 'is-selected' : undefined}
+                  data-selected={open ? 'true' : undefined}
+                >
+                  <td className="mono">
+                    <button
+                      type="button"
+                      className="env-binding-btn"
+                      aria-expanded={open}
+                      aria-controls={open ? 'env-preview-pane' : undefined}
+                      onClick={() =>
+                        setPreviewName((current) => toggleEnvPreview(current, binding.name))
+                      }
+                    >
+                      {binding.name}
+                    </button>
+                  </td>
+                  <td>{binding.kind}</td>
+                  <td className="mono">{binding.preview}</td>
+                </tr>
+                {open && detail ? (
+                  <tr className="env-preview-row">
+                    <td colSpan={3} className="env-preview-cell">
+                      <div
+                        className="env-preview"
+                        id="env-preview-pane"
+                        role="region"
+                        aria-label={`${binding.name} contents`}
+                      >
+                        <div className="env-preview-header">
+                          <div className="env-preview-title">
+                            <strong className="mono">{binding.name}</strong>
+                            <span className="muted small">{binding.kind}</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="env-preview-close"
+                            aria-label="Close preview"
+                            onClick={() => setPreviewName(null)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        {detailIsTooLarge(detail) ? (
+                          <p className="env-preview-cue muted small">
+                            Too large — showing a truncated summary.
+                          </p>
+                        ) : null}
+                        <div className="env-preview-body">
+                          <EnvDetailView binding={binding} detail={detail} />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
             )
           })}
         </tbody>
       </table>
-
-      {selected && detail ? (
-        <div className="env-preview" id="env-preview-pane" role="region" aria-label={`${selected.name} contents`}>
-          <div className="env-preview-header">
-            <div className="env-preview-title">
-              <strong className="mono">{selected.name}</strong>
-              <span className="muted small">{selected.kind}</span>
-            </div>
-            <button
-              type="button"
-              className="env-preview-close"
-              aria-label="Close preview"
-              onClick={() => setPreviewName(null)}
-            >
-              ×
-            </button>
-          </div>
-          {detailIsTooLarge(detail) ? (
-            <p className="env-preview-cue muted small">Too large — showing a truncated summary.</p>
-          ) : null}
-          <div className="env-preview-body">
-            <EnvDetailView binding={selected} detail={detail} />
-          </div>
-        </div>
-      ) : null}
     </div>
   )
 }
