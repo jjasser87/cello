@@ -40,7 +40,7 @@ const COMPLETE_TIMEOUT_MS = 5_000
 
 /** Paths for the R worker script and writable package lib. */
 export type KernelPaths = {
-  /** App / repo root (spawn cwd; used for relative path defaults). */
+  /** App / repo root (always used as Rscript spawn cwd; project folder uses setwd). */
   root: string
   /** Absolute path to `worker.R` (must be a real filesystem path — not inside asar). */
   worker: string
@@ -88,6 +88,27 @@ async function resolveRscript(override: string | null): Promise<string | null> {
   return findRscript({ override })
 }
 
+/**
+ * Human-readable reason when the R worker child exits.
+ * Windows STATUS_APPLICATION_HANG is 0xCFFFFFFF (unsigned 3489660927 /
+ * signed -805306369) — often seen when Rscript is spawned with a bad cwd
+ * (e.g. a brand-new project folder) or a GUI/console hang.
+ */
+export function describeWorkerExit(code: number | null | undefined, stderr: string): string {
+  const trimmed = stderr.trim()
+  if (trimmed) return trimmed
+  if (code === null || code === undefined) return 'R worker exited'
+  const unsigned = code < 0 ? code + 0x1_0000_0000 : code
+  if (unsigned === 0xcfffffff || code === -805306369) {
+    return (
+      'R worker hung and was terminated by Windows (STATUS_APPLICATION_HANG). ' +
+      'Cello keeps the worker process cwd on the app root and only setwd() into the opened folder — ' +
+      'if this persists, set Settings → R path to Rscript.exe (not Rgui/R.exe).'
+    )
+  }
+  return `R worker exited (${code})`
+}
+
 async function ensureJsonlite(rscript: string, libDir: string): Promise<void> {
   await mkdir(libDir, { recursive: true })
   const marker = path.join(libDir, 'jsonlite')
@@ -106,6 +127,7 @@ async function ensureJsonlite(rscript: string, libDir: string): Promise<void> {
           R_LIBS_USER: libDir,
         },
         stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
       },
     )
     let err = ''
@@ -129,7 +151,7 @@ class RKernelProcess {
   private unavailableReason: string | null = null
   private rscriptOverride: string | null = null
   private resolvedRscript: string | null = null
-  /** Opened project folder — spawn cwd + R setwd target. */
+  /** Opened project folder — R setwd target only (spawn cwd stays paths.root). */
   private projectCwd: string | null = null
   /** When true, ignore exit reason from an intentional stop/reconfigure. */
   private suppressExitReason = false
@@ -154,21 +176,39 @@ class RKernelProcess {
 
   /**
    * Point the kernel at an opened project folder (structure B).
-   * Updates spawn cwd for the next start and `setwd` on a live worker.
+   * Does **not** change the OS spawn cwd (that stays on the app/repo root so
+   * worker.R + R_LIBS resolve stably). Applies `setwd` inside the live worker
+   * via a lightweight `cwd` op — never through full eval/plot capture.
    */
   async setProjectCwd(cwd: string | null): Promise<ReturnType<RKernelProcess['status']>> {
     const next =
       typeof cwd === 'string' && cwd.trim() ? path.resolve(cwd.trim()) : null
     this.projectCwd = next
-    if (next && this.child && this.booted) {
-      const rPath = next.replace(/\\/g, '/')
-      try {
-        await this.eval(`setwd(${JSON.stringify(rPath)})`, '_project_cwd')
-      } catch (err) {
-        this.lastError = err instanceof Error ? err.message : String(err)
-      }
+    if (this.child && this.booted) {
+      await this.applyProjectCwd()
     }
     return this.status()
+  }
+
+  /** Lightweight setwd inside the worker (no PNG device / run_eval). */
+  private async applyProjectCwd(): Promise<void> {
+    if (!this.child || !this.booted) return
+    const rPath = this.projectCwd ? this.projectCwd.replace(/\\/g, '/') : null
+    try {
+      const msg = await this.send(
+        {
+          op: 'cwd',
+          id: createId(),
+          path: rPath,
+        },
+        10_000,
+      )
+      if (typeof msg.error === 'string' && msg.error) {
+        this.lastError = msg.error
+      }
+    } catch (err) {
+      this.lastError = err instanceof Error ? err.message : String(err)
+    }
   }
 
   /**
@@ -230,14 +270,19 @@ class RKernelProcess {
     }
 
     this.ready = new Promise<void>((resolve, reject) => {
+      // Always spawn from the stable app/repo root — never the opened project
+      // folder. A brand-new or synced folder as process cwd has hung Rscript on
+      // Windows (exit 3489660927 / STATUS_APPLICATION_HANG). Project paths are
+      // applied with setwd via applyProjectCwd after ready.
       const child = spawn(rscript, ['--vanilla', this.paths.worker], {
-        cwd: this.projectCwd ?? this.paths.root,
+        cwd: this.paths.root,
         env: {
           ...process.env,
           R_LIBS_USER: this.paths.libDir,
           R_LIBS: this.paths.libDir,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
       })
       this.child = child
 
@@ -277,7 +322,7 @@ class RKernelProcess {
 
       child.on('close', (code) => {
         clearTimeout(bootTimer)
-        const detail = stderr.trim() || `R worker exited (${code ?? '?'})`
+        const detail = describeWorkerExit(code, stderr)
         if (!this.suppressExitReason) {
           this.lastError = detail
           if (!this.unavailableReason) {
@@ -296,6 +341,9 @@ class RKernelProcess {
     })
 
     await this.ready
+    if (this.projectCwd) {
+      await this.applyProjectCwd()
+    }
   }
 
   private bootHandler: ((msg: Record<string, unknown>) => void) | null = null

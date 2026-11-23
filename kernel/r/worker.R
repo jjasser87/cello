@@ -861,6 +861,41 @@ local({
       next
     }
 
+    # Lightweight working-directory change for Open folder (structure B).
+    # Must NOT go through run_eval — that opens a PNG device and has hung
+    # Rscript on Windows (STATUS_APPLICATION_HANG / exit 3489660927).
+    if (identical(req$op, "cwd")) {
+      target <- if (is.null(req$path) || !nzchar(as.character(req$path)[1])) {
+        NULL
+      } else {
+        as.character(req$path)[1]
+      }
+      err <- NULL
+      if (!is.null(target)) {
+        tryCatch(
+          setwd(target),
+          error = function(e) {
+            err <<- conditionMessage(e)
+          }
+        )
+      }
+      cwd_now <- tryCatch(
+        normalizePath(getwd(), winslash = "/", mustWork = FALSE),
+        error = function(e) getwd()
+      )
+      emit(list(
+        type = "result",
+        id = req$id,
+        logs = list(),
+        plot = NULL,
+        table = NULL,
+        env = list(),
+        error = err,
+        cwd = cwd_now
+      ))
+      next
+    }
+
     if (identical(req$op, "reset")) {
       reset_kernel()
       emit(list(
