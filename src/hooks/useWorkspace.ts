@@ -56,6 +56,8 @@ import {
 } from '../lib/script'
 import { packageRunOutputs } from '../lib/runArtifacts'
 import {
+  applyCodeHistoryRevert,
+  applyTypedHistoryRevert,
   restoreCellCode,
   sourceCodeForConsole,
   sourceCodeForPlot,
@@ -1260,6 +1262,38 @@ export function useWorkspace() {
     })
   }, [])
 
+  /**
+   * Revert code history to an entry: restore that source and delete every newer
+   * history entry for the cell (plus linked plot/console/data priors).
+   */
+  const revertCodeHistory = useCallback((entryId: string) => {
+    setState((prev) => {
+      const next = applyCodeHistoryRevert(prev, entryId)
+      if (!next) {
+        return {
+          ...prev,
+          consoleLines: [
+            ...prev.consoleLines,
+            'warn: cannot revert — history entry missing or cell deleted',
+          ].slice(-200),
+        }
+      }
+      const dropped =
+        prev.history.filter((e) => e.cellId === next.activeCellId).length -
+        next.history.filter((e) => e.cellId === next.activeCellId).length
+      return {
+        ...prev,
+        ...next,
+        consoleLines: [
+          ...prev.consoleLines,
+          dropped > 0
+            ? `Reverted code history — removed ${dropped} newer version${dropped === 1 ? '' : 's'}.`
+            : 'Reverted code history (already at this version).',
+        ].slice(-200),
+      }
+    })
+  }, [])
+
   /** Browse prior plots — restores the cell source that produced the plot. */
   const setActivePlotId = useCallback((plotId: string) => {
     setState((prev) => {
@@ -1313,6 +1347,117 @@ export function useWorkspace() {
         activeCellId: entry.cellId,
         cells: source ? restoreCellCode(prev.cells, entry.cellId, source) : prev.cells,
         historyIndex: historyIndex >= 0 ? historyIndex : prev.historyIndex,
+      }
+    })
+  }, [])
+
+  /** Revert plot prior: restore code and drop newer plots for this cell. */
+  const revertPlotHistory = useCallback((plotId: string) => {
+    setState((prev) => {
+      const plot = prev.plots.find((item) => item.id === plotId)
+      if (!plot) return prev
+      const source = sourceCodeForPlot(plot, prev.history)
+      const result = applyTypedHistoryRevert({
+        items: prev.plots,
+        keepId: plotId,
+        cellId: plot.cellId,
+        sourceCode: source,
+        cells: prev.cells,
+        history: prev.history,
+        historyId: plot.historyId,
+      })
+      if (!result) return prev
+      const dropped =
+        prev.plots.filter((p) => p.cellId === plot.cellId).length -
+        result.items.filter((p) => p.cellId === plot.cellId).length
+      return {
+        ...prev,
+        plots: result.items,
+        cells: result.cells,
+        activePlotId: result.activeId,
+        activeCellId: result.activeCellId,
+        historyIndex:
+          result.historyIndex >= 0 ? result.historyIndex : prev.historyIndex,
+        consoleLines: [
+          ...prev.consoleLines,
+          dropped > 0
+            ? `Reverted plot history — removed ${dropped} newer plot${dropped === 1 ? '' : 's'}.`
+            : 'Reverted plot (already at this version).',
+        ].slice(-200),
+      }
+    })
+  }, [])
+
+  /** Revert data prior: restore code and drop newer tables for this cell. */
+  const revertTableHistory = useCallback((tableId: string) => {
+    setState((prev) => {
+      const table = prev.tables.find((item) => item.id === tableId)
+      if (!table) return prev
+      const source = sourceCodeForTable(table, prev.history)
+      const result = applyTypedHistoryRevert({
+        items: prev.tables,
+        keepId: tableId,
+        cellId: table.cellId,
+        sourceCode: source,
+        cells: prev.cells,
+        history: prev.history,
+        historyId: table.historyId,
+      })
+      if (!result) return prev
+      const dropped =
+        prev.tables.filter((t) => t.cellId === table.cellId).length -
+        result.items.filter((t) => t.cellId === table.cellId).length
+      return {
+        ...prev,
+        tables: result.items,
+        cells: result.cells,
+        activeTableId: result.activeId,
+        activeCellId: result.activeCellId,
+        historyIndex:
+          result.historyIndex >= 0 ? result.historyIndex : prev.historyIndex,
+        consoleLines: [
+          ...prev.consoleLines,
+          dropped > 0
+            ? `Reverted data history — removed ${dropped} newer table${dropped === 1 ? '' : 's'}.`
+            : 'Reverted data (already at this version).',
+        ].slice(-200),
+      }
+    })
+  }, [])
+
+  /** Revert console prior: restore code and drop newer runs for this cell. */
+  const revertConsoleHistory = useCallback((consoleId: string) => {
+    setState((prev) => {
+      const entry = prev.consoleEntries.find((item) => item.id === consoleId)
+      if (!entry) return prev
+      const source = sourceCodeForConsole(entry, prev.history)
+      const result = applyTypedHistoryRevert({
+        items: prev.consoleEntries,
+        keepId: consoleId,
+        cellId: entry.cellId,
+        sourceCode: source,
+        cells: prev.cells,
+        history: prev.history,
+        historyId: entry.historyId,
+      })
+      if (!result) return prev
+      const dropped =
+        prev.consoleEntries.filter((c) => c.cellId === entry.cellId).length -
+        result.items.filter((c) => c.cellId === entry.cellId).length
+      return {
+        ...prev,
+        consoleEntries: result.items,
+        cells: result.cells,
+        activeConsoleId: result.activeId,
+        activeCellId: result.activeCellId,
+        historyIndex:
+          result.historyIndex >= 0 ? result.historyIndex : prev.historyIndex,
+        consoleLines: [
+          ...prev.consoleLines,
+          dropped > 0
+            ? `Reverted console history — removed ${dropped} newer run${dropped === 1 ? '' : 's'}.`
+            : 'Reverted console (already at this version).',
+        ].slice(-200),
       }
     })
   }, [])
@@ -1428,9 +1573,13 @@ export function useWorkspace() {
     resetKernel,
     setHistoryIndex,
     restoreHistoryCode,
+    revertCodeHistory,
     setActivePlotId,
     setActiveTableId,
     setActiveConsoleId,
+    revertPlotHistory,
+    revertTableHistory,
+    revertConsoleHistory,
     exportScript,
     importScript,
   }
