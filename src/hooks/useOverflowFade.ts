@@ -1,23 +1,38 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
-import { canScrollFurther } from '../lib/overflow'
+import { canScrollFurther, canScrollFurtherRight } from '../lib/overflow'
+
+export interface OverflowCues {
+  moreBelow: boolean
+  moreRight: boolean
+}
 
 /**
- * Tracks whether a scrollport has more content below the fold so the helper
- * panel can show a bottom fade cue. Mutation/Resize observers keep the cue
- * in sync when panel content changes.
+ * Tracks whether a scrollport has more content below / to the right of the
+ * fold so panels and the editor can show edge shade cues instead of scrollbar
+ * chrome. Mutation/Resize observers keep the cues in sync when DOM content
+ * changes; pass `contentKey` for value-driven surfaces (e.g. a textarea).
  */
-export function useOverflowFade(ref: RefObject<HTMLElement | null>): boolean {
-  const [moreBelow, setMoreBelow] = useState(false)
+export function useOverflowFade(
+  ref: RefObject<HTMLElement | null>,
+  contentKey?: string | number,
+): OverflowCues {
+  const [cues, setCues] = useState<OverflowCues>({
+    moreBelow: false,
+    moreRight: false,
+  })
 
   useLayoutEffect(() => {
     const el = ref.current
     if (!el) {
-      setMoreBelow(false)
+      setCues({ moreBelow: false, moreRight: false })
       return
     }
 
     const update = () => {
-      setMoreBelow(canScrollFurther(el))
+      setCues({
+        moreBelow: canScrollFurther(el),
+        moreRight: canScrollFurtherRight(el),
+      })
     }
 
     update()
@@ -36,7 +51,7 @@ export function useOverflowFade(ref: RefObject<HTMLElement | null>): boolean {
       ro?.disconnect()
       mo?.disconnect()
     }
-  }, [ref])
+  }, [ref, contentKey])
 
-  return moreBelow
+  return cues
 }

@@ -574,12 +574,66 @@ html.is-desktop .workspace {
   max-height: max(220px, var(--ribbon-track-min));
   overflow: auto;
   overscroll-behavior: contain;
+  /* Keep chrome clean; edge shades signal overflow instead of a scrollbar. */
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   resize: none;
   background: transparent;
   /* Ink lives on the highlight layer; caret stays visible. */
   color: transparent;
   -webkit-text-fill-color: transparent;
   caret-color: var(--ink);
+}
+
+.code-area::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/*
+ * Editor overflow cues — same idea as .side-panel-fade: soft edge shade when
+ * more content can be scrolled (mouse wheel / drag / touch).
+ */
+.code-surface-fade {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  z-index: 2;
+}
+
+.code-surface-fade-y {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.75rem;
+  background: linear-gradient(
+    to top,
+    var(--bg-code) 8%,
+    rgba(14, 14, 14, 0.72) 42%,
+    transparent 100%
+  );
+}
+
+.code-surface-fade-x {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 2.75rem;
+  background: linear-gradient(
+    to left,
+    var(--bg-code) 8%,
+    rgba(14, 14, 14, 0.72) 42%,
+    transparent 100%
+  );
+}
+
+.code-surface[data-more-below='true'] .code-surface-fade-y {
+  opacity: 1;
+}
+
+.code-surface[data-more-right='true'] .code-surface-fade-x {
+  opacity: 1;
 }
 
 .code-area::placeholder {

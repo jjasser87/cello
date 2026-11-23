@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useOverflowFade } from '../hooks/useOverflowFade'
 import { highlightHtml } from '../lib/highlight'
 import {
   completeOnRKernel,
@@ -64,6 +65,8 @@ export function CellEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestGen = useRef(0)
   const [popup, setPopup] = useState<PopupState | null>(null)
+  // Shade cues track textarea overflow; contentKey covers value-driven growth.
+  const { moreBelow, moreRight } = useOverflowFade(ref, `${cell.id}:${cell.code}`)
 
   useEffect(() => {
     // Keep the writing surface focused after jumping cells via nav / shortcuts.
@@ -294,7 +297,11 @@ export function CellEditor({
       */}
       <div className="workspace-lane">
         <main className="main-window" ref={frameRef}>
-          <div className="code-surface">
+          <div
+            className="code-surface"
+            data-more-below={moreBelow ? 'true' : 'false'}
+            data-more-right={moreRight ? 'true' : 'false'}
+          >
             <pre
               ref={highlightRef}
               className="code-highlight"
@@ -412,6 +419,9 @@ export function CellEditor({
                   : '// Write the focused cell here…'
               }
             />
+            {/* Edge shades cue overflow — no scrollbar chrome (match helper panels). */}
+            <div className="code-surface-fade code-surface-fade-y" aria-hidden="true" />
+            <div className="code-surface-fade code-surface-fade-x" aria-hidden="true" />
           </div>
           {visiblePopup ? (
             <ul

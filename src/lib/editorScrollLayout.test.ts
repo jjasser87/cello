@@ -39,6 +39,7 @@ describe('EDITOR_SCROLL_LAYOUT', () => {
     assert.equal(EDITOR_SCROLL_LAYOUT.maxWritingWidth, '80ch')
     assert.equal(EDITOR_SCROLL_LAYOUT.overflow, 'auto')
     assert.equal(EDITOR_SCROLL_LAYOUT.whiteSpace, 'pre')
+    assert.equal(EDITOR_SCROLL_LAYOUT.scrollbarWidth, 'none')
   })
 })
 
@@ -50,6 +51,12 @@ describe('editor scroll CSS contract', () => {
     declares(block, 'height', EDITOR_SCROLL_LAYOUT.frameHeight)
     declares(block, 'max-height', EDITOR_SCROLL_LAYOUT.frameHeight)
     declares(block, 'overflow', EDITOR_SCROLL_LAYOUT.overflow)
+    declares(block, 'scrollbar-width', EDITOR_SCROLL_LAYOUT.scrollbarWidth)
+  })
+
+  it('hides native scrollbar chrome on .code-area', () => {
+    assert.match(css, /\.code-area::-webkit-scrollbar\s*\{[^}]*width:\s*0/s)
+    assert.match(css, /\.code-area::-webkit-scrollbar\s*\{[^}]*height:\s*0/s)
   })
 
   it('keeps long lines on one row so horizontal scroll is available', () => {
@@ -58,11 +65,32 @@ describe('editor scroll CSS contract', () => {
       shared.trim().length > 0 ? shared : ruleBlock('.code-highlight, .code-area')
     declares(block, 'white-space', EDITOR_SCROLL_LAYOUT.whiteSpace)
   })
+
+  it('defines bottom and right edge shade cues for overflow', () => {
+    assert.match(css, /\.code-surface-fade-y\s*\{/)
+    assert.match(css, /\.code-surface-fade-x\s*\{/)
+    assert.match(
+      css,
+      /\.code-surface\[data-more-below='true'\]\s*\.code-surface-fade-y\s*\{[^}]*opacity:\s*1/s,
+    )
+    assert.match(
+      css,
+      /\.code-surface\[data-more-right='true'\]\s*\.code-surface-fade-x\s*\{[^}]*opacity:\s*1/s,
+    )
+  })
 })
 
 describe('CellEditor auto-grow guard', () => {
   it('does not set textarea height from scrollHeight', () => {
     assert.doesNotMatch(cellEditor, /scrollHeight/)
     assert.doesNotMatch(cellEditor, /style\.height\s*=/)
+  })
+
+  it('wires overflow shade cues on the code surface', () => {
+    assert.match(cellEditor, /useOverflowFade/)
+    assert.match(cellEditor, /data-more-below/)
+    assert.match(cellEditor, /data-more-right/)
+    assert.match(cellEditor, /code-surface-fade-y/)
+    assert.match(cellEditor, /code-surface-fade-x/)
   })
 })
