@@ -1,10 +1,16 @@
 import { useRef, useState } from 'react'
 import { FlowGraphView } from '../FlowGraph'
 import { diffLines } from '../../lib/diff'
+import {
+  detailFromPreview,
+  detailIsTooLarge,
+  resolveEnvPreviewName,
+  toggleEnvPreview,
+} from '../../lib/envPreview'
 import { formatPanelTimestamp } from '../../lib/formatTimestamp'
 import { useOverflowFade } from '../../hooks/useOverflowFade'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { PanelId } from '../../types'
+import type { EnvBinding, EnvDetail, PanelId } from '../../types'
 import { ExplainPanel } from './ExplainPanel'
 import { FilesPanel } from './FilesPanel'
 
@@ -494,29 +500,169 @@ function LineChart({
 
 function EnvPanel({ api }: SidePanelProps) {
   const { env } = api.state
+  const [previewName, setPreviewName] = useState<string | null>(null)
+  // Derive against the current snapshot so a removed binding collapses the pane.
+  const resolvedPreview = resolveEnvPreviewName(
+    previewName,
+    env.map((binding) => binding.name),
+  )
+
   if (env.length === 0) {
     return <EmptyState text="Environment is empty. Run cells to populate bindings." />
   }
+
+  const selected = resolvedPreview
+    ? (env.find((binding) => binding.name === resolvedPreview) ?? null)
+    : null
+  const detail =
+    selected?.detail ??
+    (selected ? detailFromPreview(selected.preview, selected.kind) : null)
+
   return (
-    <table className="data-table env-table">
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Kind</th>
-          <th>Preview</th>
-        </tr>
-      </thead>
-      <tbody>
-        {env.map((binding) => (
-          <tr key={binding.name}>
-            <td className="mono">{binding.name}</td>
-            <td>{binding.kind}</td>
-            <td className="mono">{binding.preview}</td>
+    <div className="env-panel">
+      <table className="data-table env-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Kind</th>
+            <th>Preview</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {env.map((binding) => {
+            const open = binding.name === resolvedPreview
+            return (
+              <tr
+                key={binding.name}
+                className={open ? 'is-selected' : undefined}
+                data-selected={open ? 'true' : undefined}
+              >
+                <td className="mono">
+                  <button
+                    type="button"
+                    className="env-binding-btn"
+                    aria-expanded={open}
+                    aria-controls={open ? 'env-preview-pane' : undefined}
+                    onClick={() =>
+                      setPreviewName((current) => toggleEnvPreview(current, binding.name))
+                    }
+                  >
+                    {binding.name}
+                  </button>
+                </td>
+                <td>{binding.kind}</td>
+                <td className="mono">{binding.preview}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+
+      {selected && detail ? (
+        <div className="env-preview" id="env-preview-pane" role="region" aria-label={`${selected.name} contents`}>
+          <div className="env-preview-header">
+            <div className="env-preview-title">
+              <strong className="mono">{selected.name}</strong>
+              <span className="muted small">{selected.kind}</span>
+            </div>
+            <button
+              type="button"
+              className="env-preview-close"
+              aria-label="Close preview"
+              onClick={() => setPreviewName(null)}
+            >
+              ×
+            </button>
+          </div>
+          {detailIsTooLarge(detail) ? (
+            <p className="env-preview-cue muted small">Too large — showing a truncated summary.</p>
+          ) : null}
+          <div className="env-preview-body">
+            <EnvDetailView binding={selected} detail={detail} />
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
+}
+
+function EnvDetailView({ binding, detail }: { binding: EnvBinding; detail: EnvDetail }) {
+  switch (detail.form) {
+    case 'scalar':
+    case 'function':
+    case 'summary':
+      return <pre className="env-preview-text mono">{detail.text || binding.preview}</pre>
+    case 'vector':
+      return (
+        <ol className="env-preview-vector mono" start={1}>
+          {detail.values.map((value, index) => (
+            <li key={index}>{value}</li>
+          ))}
+          {detail.truncated ? (
+            <li className="muted">… {detail.total - detail.values.length} more (of {detail.total})</li>
+          ) : null}
+        </ol>
+      )
+    case 'list':
+      return (
+        <table className="data-table env-preview-list">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            {detail.entries.map((entry) => (
+              <tr key={entry.name}>
+                <td className="mono">{entry.name}</td>
+                <td className="mono">{entry.preview}</td>
+              </tr>
+            ))}
+          </tbody>
+          {detail.truncated ? (
+            <tfoot>
+              <tr>
+                <td colSpan={2} className="muted small">
+                  … {detail.total - detail.entries.length} more (of {detail.total})
+                </td>
+              </tr>
+            </tfoot>
+          ) : null}
+        </table>
+      )
+    case 'table':
+      return (
+        <div className="table-scroll env-preview-table">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {detail.columns.map((col) => (
+                  <th key={col}>{col}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {detail.rows.map((row, index) => (
+                <tr key={index}>
+                  {detail.columns.map((col) => (
+                    <td key={col}>{formatCell(row[col])}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {detail.truncated ? (
+            <p className="muted small env-preview-table-meta">
+              Showing {detail.rows.length}×{detail.columns.length} of {detail.totalRows}×
+              {detail.totalCols}
+            </p>
+          ) : null}
+        </div>
+      )
+    default:
+      return <pre className="env-preview-text mono">{binding.preview}</pre>
+  }
 }
 
 function DataPanel({ api }: SidePanelProps) {

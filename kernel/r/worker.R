@@ -23,6 +23,13 @@ suppressPackageStartupMessages(library(jsonlite, quietly = TRUE))
 .cello_state$last_visible <- NULL
 # Cap Data-panel payloads so large frames stay responsive.
 .CELLO_MAX_TABLE_ROWS <- 250L
+# Inline Environment preview caps (smaller than Data-panel table capture).
+.CELLO_ENV_VECTOR_MAX <- 40L
+.CELLO_ENV_LIST_MAX <- 30L
+.CELLO_ENV_TABLE_ROWS <- 20L
+.CELLO_ENV_TABLE_COLS <- 12L
+.CELLO_ENV_STRING_MAX <- 2000L
+.CELLO_ENV_SCALAR_MAX <- 500L
 
 clear_artifacts <- function() {
   .cello_state$logs <- character(0)
@@ -343,6 +350,160 @@ preview_value <- function(value) {
   list(kind = "string", preview = paste(as.character(value), collapse = " "))
 }
 
+truncate_chars <- function(text, max_chars) {
+  text <- as.character(text)[[1]]
+  if (is.na(text)) return(list(text = "NA", truncated = FALSE))
+  n <- nchar(text, type = "chars", allowNA = TRUE)
+  if (is.na(n)) n <- nchar(text, type = "bytes")
+  if (n <= max_chars) return(list(text = text, truncated = FALSE))
+  keep <- max(0L, max_chars - 1L)
+  list(text = paste0(substr(text, 1L, keep), "…"), truncated = TRUE)
+}
+
+format_env_item <- function(value) {
+  if (is.null(value)) return("NULL")
+  if (is.function(value)) return("function()")
+  if (is.data.frame(value)) {
+    return(sprintf("data.frame(%d × %d)", nrow(value), ncol(value)))
+  }
+  if (is.matrix(value)) {
+    return(sprintf("matrix(%d × %d)", nrow(value), ncol(value)))
+  }
+  if (is.list(value)) return(sprintf("list(%d)", length(value)))
+  if (is.atomic(value) && length(value) > 1) {
+    return(sprintf("%s[%d]", typeof(value), length(value)))
+  }
+  if (length(value) == 0) return(paste0(typeof(value), "(0)"))
+  sc <- scalarize(value)
+  if (is.null(sc)) return("NA")
+  truncate_chars(as.character(sc), 80L)$text
+}
+
+detail_table <- function(value) {
+  total_rows <- as.integer(nrow(value))[1]
+  total_cols <- as.integer(ncol(value))[1]
+  if (is.na(total_rows)) total_rows <- 0L
+  if (is.na(total_cols)) total_cols <- 0L
+
+  columns <- if (is.data.frame(value)) {
+    names(value)
+  } else {
+    colnames(value)
+  }
+  if (is.null(columns)) columns <- paste0("V", seq_len(total_cols))
+  columns <- as.character(columns)
+
+  col_take <- min(length(columns), .CELLO_ENV_TABLE_COLS)
+  row_take <- min(total_rows, .CELLO_ENV_TABLE_ROWS)
+  shown_cols <- columns[seq_len(col_take)]
+
+  rows <- list()
+  if (row_take > 0L && col_take > 0L) {
+    rows <- lapply(seq_len(row_take), function(i) {
+      row <- list()
+      for (col in shown_cols) {
+        cell <- if (is.data.frame(value)) {
+          scalarize(value[[col]][[i]])
+        } else {
+          j <- match(col, columns)
+          scalarize(value[i, j])
+        }
+        row[[col]] <- cell
+      }
+      row
+    })
+  }
+
+  truncated <- total_rows > row_take || length(columns) > col_take
+  list(
+    form = "table",
+    columns = as.list(shown_cols),
+    rows = rows,
+    truncated = truncated,
+    totalRows = total_rows,
+    totalCols = length(columns)
+  )
+}
+
+detail_value <- function(value) {
+  if (is.null(value)) return(list(form = "scalar", text = "NULL"))
+
+  if (is.function(value)) {
+    args <- tryCatch({
+      paste(names(formals(value)), collapse = ", ")
+    }, error = function(e) "")
+    text <- if (nzchar(args)) paste0("function(", args, ")") else "function()"
+    return(list(form = "function", text = text))
+  }
+
+  if (is.data.frame(value) || is.matrix(value)) {
+    return(detail_table(value))
+  }
+
+  if (is.list(value)) {
+    total <- length(value)
+    take <- min(total, .CELLO_ENV_LIST_MAX)
+    nms <- names(value)
+    entries <- lapply(seq_len(take), function(i) {
+      label <- if (!is.null(nms) && nzchar(nms[[i]])) nms[[i]] else as.character(i)
+      list(name = label, preview = format_env_item(value[[i]]))
+    })
+    return(list(
+      form = "list",
+      entries = entries,
+      truncated = total > take,
+      total = total
+    ))
+  }
+
+  if (is.atomic(value) && length(value) > 1) {
+    total <- length(value)
+    take <- min(total, .CELLO_ENV_VECTOR_MAX)
+    values <- vapply(
+      seq_len(take),
+      function(i) {
+        sc <- scalarize(value[[i]])
+        if (is.null(sc)) "NA" else as.character(sc)
+      },
+      character(1)
+    )
+    return(list(
+      form = "vector",
+      values = as.list(values),
+      truncated = total > take,
+      total = total
+    ))
+  }
+
+  if (is.character(value) && length(value) == 1) {
+    raw <- as.character(value[[1]])
+    cut <- truncate_chars(raw, .CELLO_ENV_STRING_MAX)
+    if (isTRUE(cut$truncated)) {
+      return(list(form = "summary", text = cut$text, tooLarge = TRUE))
+    }
+    return(list(
+      form = "scalar",
+      text = as.character(toJSON(cut$text, auto_unbox = TRUE))
+    ))
+  }
+
+  if (is.numeric(value) || is.logical(value) || is.complex(value)) {
+    sc <- scalarize(value)
+    text <- if (is.null(sc)) "NA" else as.character(sc)
+    return(list(form = "scalar", text = text))
+  }
+
+  raw <- tryCatch(
+    paste(as.character(value), collapse = " "),
+    error = function(e) class(value)[[1]]
+  )
+  cut <- truncate_chars(raw, .CELLO_ENV_SCALAR_MAX)
+  if (isTRUE(cut$truncated)) {
+    return(list(form = "summary", text = cut$text, tooLarge = TRUE))
+  }
+  list(form = "scalar", text = cut$text)
+}
+
 # Dot-name wrappers so cells can call cello.plot / cello.table like the JS helpers.
 cello.plot <- function(...) cello$plot(...)
 cello.table <- function(...) cello$table(...)
@@ -359,7 +520,13 @@ snapshot_env <- function() {
   lapply(user_names(), function(name) {
     value <- get(name, envir = .GlobalEnv, inherits = FALSE)
     pv <- preview_value(value)
-    list(name = name, kind = pv$kind, preview = pv$preview)
+    detail <- tryCatch(
+      detail_value(value),
+      error = function(e) {
+        list(form = "summary", text = conditionMessage(e), tooLarge = FALSE)
+      }
+    )
+    list(name = name, kind = pv$kind, preview = pv$preview, detail = detail)
   })
 }
 

@@ -1172,6 +1172,7 @@ html.is-desktop .workspace {
 .history-panel,
 .plot-panel,
 .data-panel,
+.env-panel,
 .ai-panel,
 .explain-panel,
 .file-tree {
@@ -1981,6 +1982,123 @@ html.is-desktop .workspace {
 .data-table th {
   color: var(--muted);
   font-weight: 500;
+}
+
+.env-table tr.is-selected td {
+  background: var(--wood-soft);
+}
+
+.env-binding-btn {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--wood-bright);
+  font: inherit;
+  font-family: var(--font-mono);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.15em;
+}
+
+.env-binding-btn:hover,
+.env-binding-btn:focus-visible,
+.env-table tr.is-selected .env-binding-btn {
+  text-decoration-color: var(--wood);
+  outline: none;
+}
+
+.env-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-height: 0;
+  max-height: 14rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-code);
+}
+
+.env-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.env-preview-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.env-preview-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.env-preview-close {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.env-preview-close:hover,
+.env-preview-close:focus-visible {
+  color: var(--ink);
+  border-color: var(--wood);
+  outline: none;
+}
+
+.env-preview-cue {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.env-preview-body {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-width: none;
+}
+
+.env-preview-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.env-preview-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.env-preview-vector {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.env-preview-table-meta {
+  margin: 0.35rem 0.45rem 0.45rem;
 }
 
 .table-scroll {
