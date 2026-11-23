@@ -12,6 +12,9 @@ export type PanelId =
 
 export type KernelLanguage = 'r' | 'javascript'
 
+/** Where the ribbon helper cluster sits relative to the main editor. */
+export type HelperDock = 'left' | 'right' | 'top' | 'bottom'
+
 export type CellStatus = 'idle' | 'running' | 'ok' | 'error'
 
 /** Feedback on a cell explanation — shaped for later AI audit loops. */
@@ -117,6 +120,8 @@ export interface WorkspaceState {
   activeCellId: string
   activePanel: PanelId
   sidePanelOpen: boolean
+  /** Ribbon helpers dock relative to the editor (app setting; default left). */
+  helperDock: HelperDock
   language: KernelLanguage
   kernelStatus: {
     available: boolean

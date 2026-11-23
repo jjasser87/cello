@@ -38,6 +38,9 @@
       ((var(--ribbon-count) - 1) * var(--ribbon-gap))
   );
   --panel-width: min(420px, 46vw);
+  /* Fixed height when helpers dock above/below the editor. */
+  --panel-height: 280px;
+  --ribbon-bar-size: 2.6rem;
   --panel-duration: 240ms;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --panel-motion: var(--panel-duration) var(--panel-ease);
@@ -203,9 +206,9 @@ html.is-desktop .app-shell {
 /*
  * Code-area frame + ribbon (+ expanded panel) as one shrink-wrapped cluster.
  * Lane height is owned by .main-window → .code-area only. The side shell is
- * absolute with top/bottom:0 so ribbon corners are flush with the cell frame
- * — not taller, not starting at the header or footnote.
- * Horizontal space for the ribbon/panel is reserved via padding-right.
+ * absolute so ribbon corners stay flush with the cell frame.
+ * Dock side (data-dock on .workspace) reserves padding for the helper cluster.
+ * Default dock: left (helpers expand leftward).
  */
 .workspace-lane {
   position: relative;
@@ -214,13 +217,51 @@ html.is-desktop .app-shell {
   max-width: none;
   height: auto;
   min-height: 0;
-  padding-right: var(--ribbon-width);
-  transition: padding-right var(--panel-motion);
+  padding-left: var(--ribbon-width);
+  padding-right: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  transition:
+    padding-left var(--panel-motion),
+    padding-right var(--panel-motion),
+    padding-top var(--panel-motion),
+    padding-bottom var(--panel-motion);
   box-sizing: content-box;
 }
 
-.workspace.panel-open .workspace-lane {
+.workspace.panel-open .workspace-lane,
+.workspace.panel-open[data-dock='left'] .workspace-lane {
+  padding-left: calc(var(--ribbon-width) + var(--panel-width));
+}
+
+.workspace[data-dock='right'] .workspace-lane {
+  padding-left: 0;
+  padding-right: var(--ribbon-width);
+}
+
+.workspace.panel-open[data-dock='right'] .workspace-lane {
+  padding-left: 0;
   padding-right: calc(var(--ribbon-width) + var(--panel-width));
+}
+
+.workspace[data-dock='top'] .workspace-lane {
+  padding-left: 0;
+  padding-right: 0;
+  padding-top: var(--ribbon-bar-size);
+}
+
+.workspace.panel-open[data-dock='top'] .workspace-lane {
+  padding-top: calc(var(--ribbon-bar-size) + var(--panel-height));
+}
+
+.workspace[data-dock='bottom'] .workspace-lane {
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: var(--ribbon-bar-size);
+}
+
+.workspace.panel-open[data-dock='bottom'] .workspace-lane {
+  padding-bottom: calc(var(--ribbon-bar-size) + var(--panel-height));
 }
 
 .main-window {
@@ -421,10 +462,10 @@ html.is-desktop .app-shell {
   width: max-content;
   max-width: none;
   min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
-  /* Left corners only — right edge meets the ribbon flush. */
-  border-radius: var(--radius) 0 0 var(--radius);
+  /* Default (left dock): right corners only — left edge meets the ribbon flush. */
+  border-radius: 0 var(--radius) var(--radius) 0;
   border: var(--cell-border) solid var(--line);
-  border-right-color: transparent;
+  border-left-color: transparent;
   background: var(--bg-code);
   box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
   /* Syntax colors — warm cello wood on charcoal (enough contrast to read) */
@@ -702,29 +743,97 @@ html.is-desktop .app-shell {
 
 .side-shell {
   position: absolute;
-  /* Flush with the code-area frame: same top, bottom, and height. */
+  /* Default dock: left of the code frame (flush top/bottom). */
   top: 0;
-  right: 0;
+  left: 0;
+  right: auto;
   bottom: 0;
   height: auto;
   display: flex;
-  flex-direction: row;
+  /* DOM order is panel-slot then ribbon; reverse so ribbon is outermost left. */
+  flex-direction: row-reverse;
   align-items: stretch;
-  /* Width comes from ribbon + animated panel slot — never from the viewport. */
   width: var(--ribbon-width);
-  /* Seam against the cell is drawn by the first visible child (panel or ribbon). */
-  border-left: 1px solid var(--line);
-  border-radius: 0 var(--radius) var(--radius) 0;
+  border: none;
+  border-right: 1px solid var(--line);
+  border-radius: var(--radius) 0 0 var(--radius);
   background: var(--bg-elevated);
-  /* Clip only horizontally during width animation; no nested scroll pane. */
   overflow: hidden;
-  transition: width var(--panel-motion);
+  transition:
+    width var(--panel-motion),
+    height var(--panel-motion);
 }
 
 .side-shell.is-open {
   width: calc(var(--ribbon-width) + var(--panel-width));
-  /* Fixed to the cell frame; overflow scrolls inside .side-panel-body. */
   overflow: hidden;
+}
+
+/* Right dock — previous default layout. */
+.workspace[data-dock='right'] .side-shell {
+  left: auto;
+  right: 0;
+  flex-direction: row;
+  border-right: none;
+  border-left: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.workspace[data-dock='right'] .code-surface {
+  border-radius: var(--radius) 0 0 var(--radius);
+  border-left-color: var(--line);
+  border-right-color: transparent;
+}
+
+/* Top / bottom docks — horizontal ribbon bar + panel stack. */
+.workspace[data-dock='top'] .side-shell,
+.workspace[data-dock='bottom'] .side-shell {
+  left: 0;
+  right: auto;
+  width: var(--cell-frame-width);
+  height: var(--ribbon-bar-size);
+  flex-direction: column-reverse;
+  border-right: none;
+  border-left: none;
+}
+
+.workspace[data-dock='top'] .side-shell {
+  top: 0;
+  bottom: auto;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--radius) var(--radius) 0 0;
+  flex-direction: column-reverse;
+}
+
+.workspace[data-dock='bottom'] .side-shell {
+  top: auto;
+  bottom: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--radius) var(--radius);
+  flex-direction: column;
+}
+
+.workspace.panel-open[data-dock='top'] .side-shell,
+.workspace.panel-open[data-dock='bottom'] .side-shell {
+  width: var(--cell-frame-width);
+  height: calc(var(--ribbon-bar-size) + var(--panel-height));
+}
+
+.workspace[data-dock='top'] .code-surface,
+.workspace[data-dock='bottom'] .code-surface {
+  min-height: max(220px, var(--flow-frame-min, 0px));
+  border-left-color: var(--line);
+  border-right-color: var(--line);
+}
+
+.workspace[data-dock='top'] .code-surface {
+  border-radius: 0 0 var(--radius) var(--radius);
+  border-top-color: transparent;
+}
+
+.workspace[data-dock='bottom'] .code-surface {
+  border-radius: var(--radius) var(--radius) 0 0;
+  border-bottom-color: transparent;
 }
 
 /* Slot owns the open/close width animation; panel inside stays a fixed width. */
@@ -752,7 +861,7 @@ html.is-desktop .app-shell {
   min-height: 0;
 }
 
-/* Ribbon stays at the far/right edge of the cluster (after the panel slot). */
+/* Ribbon sits at the outer edge of the helper cluster (away from the cell). */
 .side-ribbon {
   width: var(--ribbon-width);
   flex: 0 0 var(--ribbon-width);
@@ -765,10 +874,31 @@ html.is-desktop .app-shell {
   /* Tight inset so CE Cells sits at the cell-frame top corner. */
   padding: var(--ribbon-pad-y) 0.28rem;
   background: #050505;
-  border-left: none;
+  border: none;
   z-index: 1;
   /* No inner scrollbar — cell min-height fits the full ribbon track. */
   overflow: hidden;
+}
+
+.workspace[data-dock='top'] .side-ribbon,
+.workspace[data-dock='bottom'] .side-ribbon {
+  width: 100%;
+  flex: 0 0 var(--ribbon-bar-size);
+  height: var(--ribbon-bar-size);
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.12rem;
+  padding: 0.18rem 0.28rem;
+  overflow: hidden;
+}
+
+.workspace[data-dock='top'] .ribbon-item,
+.workspace[data-dock='bottom'] .ribbon-item {
+  flex: 1 1 0;
+  min-width: 0;
+  max-height: none;
+  height: 100%;
 }
 
 .ribbon-item {
@@ -837,15 +967,66 @@ html.is-desktop .app-shell {
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
-  border-left: 1px solid var(--line);
+  border: none;
+  /* Default left dock: seam against the cell on the panel's right edge. */
+  border-right: 1px solid var(--line);
   overflow: hidden;
-  /* Slide out from the cell toward the outer ribbon. */
-  transform: translateX(-10px);
+  /* Default left dock: slide in from the left toward the cell. */
+  transform: translateX(10px);
   transition: transform var(--panel-motion);
 }
 
 .side-shell.is-open .side-panel {
   transform: translateX(0);
+}
+
+.workspace[data-dock='right'] .side-panel {
+  border-right: none;
+  border-left: 1px solid var(--line);
+  transform: translateX(-10px);
+}
+
+.workspace[data-dock='right'] .side-shell.is-open .side-panel {
+  transform: translateX(0);
+}
+
+.workspace[data-dock='top'] .side-panel-slot,
+.workspace[data-dock='bottom'] .side-panel-slot {
+  width: 100%;
+  height: 0;
+  transition:
+    height var(--panel-motion),
+    opacity calc(var(--panel-duration) * 0.85) var(--panel-ease);
+}
+
+.workspace.panel-open[data-dock='top'] .side-panel-slot,
+.workspace.panel-open[data-dock='bottom'] .side-panel-slot {
+  width: 100%;
+  height: var(--panel-height);
+}
+
+.workspace[data-dock='top'] .side-panel,
+.workspace[data-dock='bottom'] .side-panel {
+  width: 100%;
+  min-width: 0;
+  height: var(--panel-height);
+  max-height: var(--panel-height);
+  border-left: none;
+}
+
+.workspace[data-dock='top'] .side-panel {
+  border-bottom: 1px solid var(--line);
+  transform: translateY(8px);
+}
+
+.workspace[data-dock='bottom'] .side-panel {
+  border-top: 1px solid var(--line);
+  transform: translateY(-8px);
+}
+
+.workspace[data-dock='top'] .side-shell.is-open .side-panel,
+.workspace[data-dock='bottom'] .side-shell.is-open .side-panel {
+  transform: translateY(0);
 }
 
 .panel-header {
@@ -2206,7 +2387,8 @@ html.is-desktop .app-shell {
   gap: 0.45rem;
 }
 
-.palette-pref-input {
+.palette-pref-input,
+.palette-pref-select {
   width: 100%;
   box-sizing: border-box;
   border: 1px solid var(--line);
@@ -2218,12 +2400,20 @@ html.is-desktop .app-shell {
   padding: 0.4rem 0.55rem;
 }
 
-.palette-pref-input:focus {
+.palette-pref-select {
+  width: auto;
+  min-width: 7.5rem;
+  cursor: pointer;
+}
+
+.palette-pref-input:focus,
+.palette-pref-select:focus {
   outline: none;
   border-color: rgba(196, 138, 58, 0.55);
 }
 
-.palette-pref-input:disabled {
+.palette-pref-input:disabled,
+.palette-pref-select:disabled {
   opacity: 0.55;
 }
 

@@ -36,9 +36,8 @@ export function SidePanel({ api }: SidePanelProps) {
       aria-label={open ? `${state.activePanel} panel` : 'Panel ribbon'}
     >
       {/*
-        Order: panel slot, then ribbon. Collapsed slot width is 0 so the ribbon
-        sits against the cell; when open the panel grows between cell and ribbon
-        and the ribbon stays at the far/right edge of the expanded cluster.
+        DOM order: panel slot, then ribbon. CSS flex-direction (per data-dock)
+        keeps the ribbon on the outer edge and the panel adjacent to the cell.
       */}
       <div
         className="side-panel-slot"

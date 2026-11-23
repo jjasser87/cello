@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { PanelId } from '../types'
+import type { HelperDock, PanelId } from '../types'
+
+const HELPER_DOCK_OPTIONS: { id: HelperDock; label: string }[] = [
+  { id: 'left', label: 'Left' },
+  { id: 'right', label: 'Right' },
+  { id: 'top', label: 'Top' },
+  { id: 'bottom', label: 'Bottom' },
+]
 
 export type CommandId =
   | `panel:${PanelId}`
@@ -106,7 +113,7 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
     {
       id: 'settings',
       label: 'Settings…',
-      hint: 'R path · prefs',
+      hint: 'R path · helper dock',
       group: 'Settings',
     },
   ]
@@ -118,9 +125,11 @@ interface CommandPaletteProps {
   rscriptResolved: string | null
   kernelAvailable: boolean
   kernelMessage: string | null
+  helperDock: HelperDock
   onClose: () => void
   onRun: (id: CommandId) => void
   onSetRscriptPath: (path: string | null) => void | Promise<void>
+  onSetHelperDock: (dock: HelperDock) => void
 }
 
 export function CommandPalette({
@@ -129,9 +138,11 @@ export function CommandPalette({
   rscriptResolved,
   kernelAvailable,
   kernelMessage,
+  helperDock,
   onClose,
   onRun,
   onSetRscriptPath,
+  onSetHelperDock,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -283,10 +294,12 @@ export function CommandPalette({
             rscriptResolved={rscriptResolved}
             kernelAvailable={kernelAvailable}
             kernelMessage={kernelMessage}
+            helperDock={helperDock}
             onBack={() => setView('commands')}
             onClose={onClose}
             onToggleLanguage={() => onRun('toggle-language')}
             onSetRscriptPath={onSetRscriptPath}
+            onSetHelperDock={onSetHelperDock}
           />
         )}
       </div>
@@ -300,20 +313,24 @@ function SettingsPanel({
   rscriptResolved,
   kernelAvailable,
   kernelMessage,
+  helperDock,
   onBack,
   onClose,
   onToggleLanguage,
   onSetRscriptPath,
+  onSetHelperDock,
 }: {
   language: 'r' | 'javascript'
   rscriptPath: string | null
   rscriptResolved: string | null
   kernelAvailable: boolean
   kernelMessage: string | null
+  helperDock: HelperDock
   onBack: () => void
   onClose: () => void
   onToggleLanguage: () => void
   onSetRscriptPath: (path: string | null) => void | Promise<void>
+  onSetHelperDock: (dock: HelperDock) => void
 }) {
   const [draft, setDraft] = useState(rscriptPath ?? '')
   const [busy, setBusy] = useState(false)
@@ -349,6 +366,27 @@ function SettingsPanel({
             {language === 'r' ? 'R' : 'JavaScript'} · switch
           </button>
         </label>
+
+        <label className="palette-pref">
+          <span className="palette-pref-label" id="settings-helper-dock-label">
+            Helper dock
+          </span>
+          <select
+            className="palette-pref-select"
+            value={helperDock}
+            aria-labelledby="settings-helper-dock-label"
+            onChange={(event) => onSetHelperDock(event.target.value as HelperDock)}
+          >
+            {HELPER_DOCK_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <p className="palette-settings-note muted small">
+          Ribbon panels (Plot, Console, Data, …) sit on this side of the editor. Default is left.
+        </p>
 
         <div className="palette-pref-stack">
           <span className="palette-pref-label" id="settings-rscript-label">

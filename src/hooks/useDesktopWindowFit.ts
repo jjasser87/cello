@@ -8,6 +8,7 @@ import {
 export type DesktopFitLayoutKey = {
   sidePanelOpen: boolean
   activePanel: string
+  helperDock: string
   cellId: string
   codeLength: number
 }
@@ -17,7 +18,7 @@ export type DesktopFitLayoutKey = {
  * editor cluster. Web (`npm run dev`) is unchanged.
  */
 export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
-  const { sidePanelOpen, activePanel, cellId, codeLength } = layout
+  const { sidePanelOpen, activePanel, helperDock, cellId, codeLength } = layout
 
   useEffect(() => {
     const api = getDesktopApi()
@@ -72,5 +73,5 @@ export function useDesktopWindowFit(layout: DesktopFitLayoutKey): void {
       observer?.disconnect()
       window.removeEventListener('resize', schedule)
     }
-  }, [sidePanelOpen, activePanel, cellId, codeLength])
+  }, [sidePanelOpen, activePanel, helperDock, cellId, codeLength])
 }
