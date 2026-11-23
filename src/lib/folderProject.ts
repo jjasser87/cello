@@ -18,12 +18,13 @@ import {
   type PersistedCell,
 } from './projectFile.ts'
 import { ensureExplanation } from './explanation.ts'
+import { cellsToScript } from './script.ts'
 
 function createId(prefix: string): string {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`
 }
 
-function defaultScriptPath(language: KernelLanguage): string {
+export function defaultScriptPath(language: KernelLanguage): string {
   return language === 'r' ? 'analysis.R' : 'analysis.js'
 }
 
@@ -160,13 +161,21 @@ function normalizeRelPath(relativePath: string): string {
   return relativePath.replace(/\\/g, '/').replace(/^\/+/, '')
 }
 
+function isManifestRelPath(relativePath: string): boolean {
+  const normalized = normalizeRelPath(relativePath)
+  if (!normalized) return false
+  if (normalized.toLowerCase() === MANIFEST_NAME.toLowerCase()) return true
+  const base = normalized.split('/').pop() ?? ''
+  return base.toLowerCase() === MANIFEST_NAME.toLowerCase()
+}
+
 /** True when `relativePath` looks like a kernel source file for `language`. */
 export function isKernelSourcePath(
   relativePath: string,
   language: KernelLanguage,
 ): boolean {
   const base = normalizeRelPath(relativePath).split('/').pop() ?? ''
-  if (!base || base === MANIFEST_NAME) return false
+  if (!base || isManifestRelPath(base)) return false
   const lower = base.toLowerCase()
   return SOURCE_EXTENSIONS[language].some((ext) => lower.endsWith(ext.toLowerCase()))
 }
@@ -175,6 +184,9 @@ export function isKernelSourcePath(
  * Where Save should mirror cell sources on disk.
  * Prefers the active `scriptPath` when it is a kernel source file; otherwise the
  * language default (`analysis.R` / `analysis.js`). Never targets the manifest or sidecar.
+ *
+ * Existing folders often have `scriptPath: "cello.json"` from clicking the manifest
+ * in the File panel — that must still resolve to `analysis.R`, not skip the write.
  */
 export function resolveScriptMirrorPath(
   scriptPath: string,
@@ -183,7 +195,7 @@ export function resolveScriptMirrorPath(
   const normalized = normalizeRelPath(scriptPath)
   if (
     !normalized ||
-    normalized === MANIFEST_NAME ||
+    isManifestRelPath(normalized) ||
     normalized === SIDECAR_DIR ||
     normalized.startsWith(`${SIDECAR_DIR}/`)
   ) {
@@ -197,13 +209,62 @@ export function resolveScriptMirrorPath(
 
 /**
  * Relative path for the real on-disk source file written alongside lean `cello.json`.
- * Callers supply contents via `cellsToScript` (same as Export).
+ * Callers may supply contents via `cellsToScript` (same as Export).
  */
 export function planScriptSourcePath(state: {
   language: KernelLanguage
   scriptPath: string
 }): string {
   return resolveScriptMirrorPath(state.scriptPath, state.language)
+}
+
+/**
+ * Normalize a loaded manifest's scriptPath so existing folders that pointed at
+ * `cello.json` (or other non-source paths) show / save the language default.
+ * Does not require a new folder — same project root keeps working.
+ */
+export function normalizeFolderScriptPath(
+  scriptPath: string,
+  language: KernelLanguage,
+): string {
+  return resolveScriptMirrorPath(scriptPath, language)
+}
+
+export type FolderSaveFile = { relativePath: string; contents: string }
+
+/**
+ * Plan every text file folder Save must write: lean manifest + kernel source
+ * mirror (+ caller appends sidecar). Always includes the language-default script
+ * (`analysis.R` for R) so existing projects without that file get it on Save.
+ */
+export function planFolderSaveWrites(state: {
+  cells: {
+    id: string
+    name: string
+    code: string
+    explanation?: string
+    comments?: PersistedCell['comments']
+  }[]
+  activeCellId: string
+  activePanel: PanelId
+  language: KernelLanguage
+  scriptPath: string
+  meta: ProjectMeta
+}): { scriptPath: string; files: FolderSaveFile[] } {
+  const scriptPath = planScriptSourcePath(state)
+  const scriptContents = cellsToScript(state.cells, state.language)
+  const canonical = defaultScriptPath(state.language)
+  const scriptPaths = scriptPath === canonical ? [scriptPath] : [canonical, scriptPath]
+
+  const manifest = serializeFolderManifest({ ...state, scriptPath })
+  const files: FolderSaveFile[] = [
+    { relativePath: MANIFEST_NAME, contents: stringifyFolderManifest(manifest) },
+    ...scriptPaths.map((relativePath) => ({
+      relativePath,
+      contents: scriptContents,
+    })),
+  ]
+  return { scriptPath, files }
 }
 
 /**

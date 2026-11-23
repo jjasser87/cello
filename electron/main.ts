@@ -154,7 +154,9 @@ async function serveDist(req: IncomingMessage, res: ServerResponse): Promise<voi
   const ext = path.extname(target).toLowerCase()
   res.statusCode = 200
   res.setHeader('Content-Type', MIME[ext] ?? 'application/octet-stream')
-  res.setHeader('Cache-Control', ext === '.html' ? 'no-store' : 'public, max-age=3600')
+  // Local desktop host: never cache UI bundles. A rebuild + reload must pick up
+  // Save/path fixes immediately (max-age left users on a stale Save that skipped .R).
+  res.setHeader('Cache-Control', 'no-store')
   createReadStream(target).pipe(res)
 }
 
