@@ -37,7 +37,7 @@ export function SidePanel({ api }: SidePanelProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
 
   const isFlow = open && state.activePanel === 'structure'
-  const moreBelow = useOverflowFade(bodyRef)
+  const { moreBelow } = useOverflowFade(bodyRef)
 
   return (
     <aside

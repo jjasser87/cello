@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { canScrollFurther } from './overflow.ts'
+import { canScrollFurther, canScrollFurtherRight } from './overflow.ts'
 
 describe('canScrollFurther', () => {
   it('is false when content fits', () => {
@@ -27,6 +27,36 @@ describe('canScrollFurther', () => {
   it('ignores 1px subpixel remainder', () => {
     assert.equal(
       canScrollFurther({ scrollHeight: 201, scrollTop: 0, clientHeight: 200 }),
+      false,
+    )
+  })
+})
+
+describe('canScrollFurtherRight', () => {
+  it('is false when content fits horizontally', () => {
+    assert.equal(
+      canScrollFurtherRight({ scrollWidth: 200, scrollLeft: 0, clientWidth: 200 }),
+      false,
+    )
+  })
+
+  it('is true when content extends past the right edge', () => {
+    assert.equal(
+      canScrollFurtherRight({ scrollWidth: 400, scrollLeft: 0, clientWidth: 200 }),
+      true,
+    )
+  })
+
+  it('is false when scrolled to the right edge', () => {
+    assert.equal(
+      canScrollFurtherRight({ scrollWidth: 400, scrollLeft: 200, clientWidth: 200 }),
+      false,
+    )
+  })
+
+  it('ignores 1px subpixel remainder', () => {
+    assert.equal(
+      canScrollFurtherRight({ scrollWidth: 201, scrollLeft: 0, clientWidth: 200 }),
       false,
     )
   })
