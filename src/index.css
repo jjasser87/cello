@@ -1268,6 +1268,56 @@ html.is-desktop .workspace {
   padding-left: 1.1rem;
 }
 
+.explain-preview .explain-ul li {
+  margin: 0.15rem 0;
+}
+
+.explain-preview .explain-pre {
+  margin: 0 0 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--bg-code);
+  overflow-x: auto;
+}
+
+.explain-preview .explain-code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink);
+  white-space: pre;
+}
+
+.explain-preview .explain-inline-code {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  padding: 0.05em 0.3em;
+  border-radius: 4px;
+  background: rgba(196, 138, 58, 0.12);
+  color: var(--wood-bright);
+}
+
+.explain-preview .explain-a {
+  color: var(--wood-bright);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.explain-preview .explain-a:hover {
+  color: var(--ink);
+}
+
+.explain-preview em {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+.explain-preview strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .explain-comments {
   display: flex;
   flex-direction: column;

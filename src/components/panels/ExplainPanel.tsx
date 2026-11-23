@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { renderExplanationHtml } from '../../lib/explanation'
+import { DEFAULT_EXPLAIN_MODE, renderExplanationHtml } from '../../lib/explanation'
 import { formatPanelTimestamp } from '../../lib/formatTimestamp'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { ExplanationComment } from '../../types'
@@ -39,7 +39,7 @@ function ExplainPanelBody({
   updateExplanation: WorkspaceApi['updateExplanation']
   addExplanationComment: WorkspaceApi['addExplanationComment']
 }) {
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit')
+  const [mode, setMode] = useState<'edit' | 'preview'>(DEFAULT_EXPLAIN_MODE)
   const [draftComment, setDraftComment] = useState('')
 
   const submitComment = () => {
