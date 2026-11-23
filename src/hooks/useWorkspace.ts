@@ -54,7 +54,12 @@ import {
   scriptToCells,
   starterScript,
 } from '../lib/script'
-import { mergeHistoryAfterRun, packageRunOutputs } from '../lib/runArtifacts'
+import {
+  latestPanelItemForCell,
+  mergeHistoryAfterRun,
+  mergePanelAfterRun,
+  packageRunOutputs,
+} from '../lib/runArtifacts'
 import {
   applyCodeHistoryRevert,
   applyTypedHistoryRevert,
@@ -170,17 +175,27 @@ function applyRunToState(
 ): WorkspaceState {
   const { cellId, cellName, code, result } = args
   const previousEntry = [...prev.history].reverse().find((entry) => entry.cellId === cellId)
+  const previousPlot = latestPanelItemForCell(prev.plots, cellId)
+  const previousTable = latestPanelItemForCell(prev.tables, cellId)
+  const previousConsole = latestPanelItemForCell(prev.consoleEntries, cellId)
   const packaged = packageRunOutputs({
     cellId,
     cellName,
     code,
     previousEntry: previousEntry ?? null,
+    previousPlot: previousPlot ?? null,
+    previousTable: previousTable ?? null,
+    previousConsole: previousConsole ?? null,
     result,
   })
 
-  const plots = packaged.plot ? [...prev.plots, packaged.plot] : prev.plots
-  const tables = packaged.table ? [...prev.tables, packaged.table] : prev.tables
-  const consoleEntries = [...prev.consoleEntries, packaged.consoleEntry]
+  const plots = mergePanelAfterRun(prev.plots, packaged.plot, packaged.plotReused)
+  const tables = mergePanelAfterRun(prev.tables, packaged.table, packaged.tableReused)
+  const consoleEntries = mergePanelAfterRun(
+    prev.consoleEntries,
+    packaged.consoleEntry,
+    packaged.consoleReused,
+  )
   const history = mergeHistoryAfterRun(
     prev.history,
     packaged.historyEntry,
@@ -959,9 +974,9 @@ export function useWorkspace() {
 
         setState((prev) => {
           let historyCursor = [...priorHistory]
-          const plots = [...prev.plots]
-          const tables = [...prev.tables]
-          const consoleEntries = [...prev.consoleEntries]
+          let plots = [...prev.plots]
+          let tables = [...prev.tables]
+          let consoleEntries = [...prev.consoleEntries]
           const consoleExtra: string[] = []
           const statusById = new Map<
             string,
@@ -981,6 +996,9 @@ export function useWorkspace() {
               cellName: cell.name,
               code: cell.code,
               previousEntry: previousEntry ?? null,
+              previousPlot: latestPanelItemForCell(plots, cell.id) ?? null,
+              previousTable: latestPanelItemForCell(tables, cell.id) ?? null,
+              previousConsole: latestPanelItemForCell(consoleEntries, cell.id) ?? null,
               result,
             })
             historyCursor = mergeHistoryAfterRun(
@@ -988,9 +1006,13 @@ export function useWorkspace() {
               packaged.historyEntry,
               packaged.historyReused,
             )
-            if (packaged.plot) plots.push(packaged.plot)
-            if (packaged.table) tables.push(packaged.table)
-            consoleEntries.push(packaged.consoleEntry)
+            plots = mergePanelAfterRun(plots, packaged.plot, packaged.plotReused)
+            tables = mergePanelAfterRun(tables, packaged.table, packaged.tableReused)
+            consoleEntries = mergePanelAfterRun(
+              consoleEntries,
+              packaged.consoleEntry,
+              packaged.consoleReused,
+            )
             lastConsoleId = packaged.consoleEntry.id
             lastHistoryId = packaged.historyEntry.id
             statusById.set(cell.id, {
@@ -1082,15 +1104,21 @@ export function useWorkspace() {
           error?: string
           historyEntry: HistoryEntry
           historyReused: boolean
-          plot?: NonNullable<RunArtifacts['plot']>
-          table?: NonNullable<RunArtifacts['table']>
+          plot: ReturnType<typeof packageRunOutputs>['plot']
+          plotReused: boolean
+          table: ReturnType<typeof packageRunOutputs>['table']
+          tableReused: boolean
           consoleEntry: ReturnType<typeof packageRunOutputs>['consoleEntry']
+          consoleReused: boolean
           env: RunArtifacts['env']
           logs: string[]
         }
 
         const batches: Batch[] = []
         let historyCursor = [...priorHistory]
+        let plotCursor = [...stateRef.current.plots]
+        let tableCursor = [...stateRef.current.tables]
+        let consoleCursor = [...stateRef.current.consoleEntries]
         let stopped = false
 
         for (const cell of cells) {
@@ -1103,6 +1131,9 @@ export function useWorkspace() {
             cellName: cell.name,
             code: cell.code,
             previousEntry: previousEntry ?? null,
+            previousPlot: latestPanelItemForCell(plotCursor, cell.id) ?? null,
+            previousTable: latestPanelItemForCell(tableCursor, cell.id) ?? null,
+            previousConsole: latestPanelItemForCell(consoleCursor, cell.id) ?? null,
             result,
           })
           historyCursor = mergeHistoryAfterRun(
@@ -1110,15 +1141,25 @@ export function useWorkspace() {
             packaged.historyEntry,
             packaged.historyReused,
           )
+          plotCursor = mergePanelAfterRun(plotCursor, packaged.plot, packaged.plotReused)
+          tableCursor = mergePanelAfterRun(tableCursor, packaged.table, packaged.tableReused)
+          consoleCursor = mergePanelAfterRun(
+            consoleCursor,
+            packaged.consoleEntry,
+            packaged.consoleReused,
+          )
           batches.push({
             cellId: cell.id,
             status: result.error ? 'error' : 'ok',
             error: result.error,
             historyEntry: packaged.historyEntry,
             historyReused: packaged.historyReused,
-            plot: packaged.plot ?? undefined,
-            table: packaged.table ?? undefined,
+            plot: packaged.plot,
+            plotReused: packaged.plotReused,
+            table: packaged.table,
+            tableReused: packaged.tableReused,
             consoleEntry: packaged.consoleEntry,
+            consoleReused: packaged.consoleReused,
             env: result.env,
             logs: result.logs,
           })
@@ -1130,25 +1171,23 @@ export function useWorkspace() {
 
         setState((prev) => {
           let history = [...prev.history]
+          let plots = [...prev.plots]
+          let tables = [...prev.tables]
+          let consoleEntries = [...prev.consoleEntries]
           for (const batch of batches) {
             history = mergeHistoryAfterRun(
               history,
               batch.historyEntry,
               batch.historyReused,
             )
+            plots = mergePanelAfterRun(plots, batch.plot, batch.plotReused)
+            tables = mergePanelAfterRun(tables, batch.table, batch.tableReused)
+            consoleEntries = mergePanelAfterRun(
+              consoleEntries,
+              batch.consoleEntry,
+              batch.consoleReused,
+            )
           }
-          const plots = [
-            ...prev.plots,
-            ...batches.flatMap((batch) => (batch.plot ? [batch.plot] : [])),
-          ]
-          const tables = [
-            ...prev.tables,
-            ...batches.flatMap((batch) => (batch.table ? [batch.table] : [])),
-          ]
-          const consoleEntries = [
-            ...prev.consoleEntries,
-            ...batches.map((batch) => batch.consoleEntry),
-          ]
           const last = batches[batches.length - 1]
           let activePanel = prev.activePanel
           let sidePanelOpen = prev.sidePanelOpen

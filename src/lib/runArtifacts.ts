@@ -3,12 +3,20 @@ import type { ConsoleEntry, DataTable, HistoryEntry, PlotSpec } from '../types.t
 import type { RunArtifacts } from './runtime.ts'
 
 /**
- * Compare rule for History dedupe: exact string equality of cell source.
- * Whitespace / formatting differences count as a new History entry.
+ * Compare rule for History / panel-history dedupe: exact string equality of
+ * cell source. Whitespace / formatting differences count as a new entry.
  * (Chosen over normalize-and-trim so intentional whitespace edits are kept.)
  */
 export function isSameHistoryCode(a: string, b: string): boolean {
   return a === b
+}
+
+/** Latest series item for a cell (newest last). */
+export function latestPanelItemForCell<T extends { cellId: string }>(
+  items: T[],
+  cellId: string,
+): T | undefined {
+  return [...items].reverse().find((item) => item.cellId === cellId)
 }
 
 /** Replace an existing History row in place, or append when the code changed. */
@@ -21,6 +29,17 @@ export function mergeHistoryAfterRun(
   return history.map((item) => (item.id === entry.id ? entry : item))
 }
 
+/** Replace a Plot / Data / Console row in place, or append when source changed. */
+export function mergePanelAfterRun<T extends { id: string }>(
+  items: T[],
+  next: T | null | undefined,
+  reused: boolean,
+): T[] {
+  if (!next) return items
+  if (!reused) return [...items, next]
+  return items.map((item) => (item.id === next.id ? next : item))
+}
+
 /** Stamp source code + history link onto plot/table and build a console entry. */
 export function packageRunOutputs(args: {
   cellId: string
@@ -28,38 +47,60 @@ export function packageRunOutputs(args: {
   code: string
   /** Latest History entry for this cell, if any (used for dedupe + previousCode). */
   previousEntry?: HistoryEntry | null
+  /** Latest Plot / Data / Console for this cell — reused when source matches. */
+  previousPlot?: PlotSpec | null
+  previousTable?: DataTable | null
+  previousConsole?: ConsoleEntry | null
   /** @deprecated Prefer previousEntry; kept for call-site compatibility. */
   previousCode?: string
   result: RunArtifacts
 }): {
   historyEntry: HistoryEntry
-  /** True when code matched the latest entry — timestamp bumped, no new row. */
+  /** True when code matched the latest History entry — timestamp bumped, no new row. */
   historyReused: boolean
   plot: PlotSpec | null
+  plotReused: boolean
   table: DataTable | null
+  tableReused: boolean
   consoleEntry: ConsoleEntry
+  consoleReused: boolean
 } {
   const { cellId, cellName, code, result } = args
   const previousEntry = args.previousEntry ?? null
+  const previousPlot = args.previousPlot ?? null
+  const previousTable = args.previousTable ?? null
+  const previousConsole = args.previousConsole ?? null
   const previousCode = previousEntry?.code ?? args.previousCode ?? ''
-  const reuse =
+  const historyReused =
     previousEntry != null && isSameHistoryCode(previousEntry.code, code)
 
-  const historyId = reuse ? previousEntry.id : createId('hist')
-  const consoleId = createId('console')
+  const historyId = historyReused ? previousEntry.id : createId('hist')
   const timestamp = Date.now()
   const status = result.error ? ('error' as const) : ('ok' as const)
 
+  const plotReused =
+    result.plot != null &&
+    previousPlot != null &&
+    isSameHistoryCode(previousPlot.sourceCode ?? '', code)
   const plot = result.plot
     ? {
         ...result.plot,
+        id: plotReused ? previousPlot.id : result.plot.id,
+        createdAt: timestamp,
         sourceCode: code,
         historyId,
       }
     : null
+
+  const tableReused =
+    result.table != null &&
+    previousTable != null &&
+    isSameHistoryCode(previousTable.sourceCode ?? '', code)
   const table = result.table
     ? {
         ...result.table,
+        id: tableReused ? previousTable.id : result.table.id,
+        createdAt: timestamp,
         sourceCode: code,
         historyId,
       }
@@ -71,6 +112,10 @@ export function packageRunOutputs(args: {
       ? `Error: ${result.error}`
       : '(no output)'
 
+  const consoleReused =
+    previousConsole != null && isSameHistoryCode(previousConsole.sourceCode, code)
+  const consoleId = consoleReused ? previousConsole.id : createId('console')
+
   const consoleEntry: ConsoleEntry = {
     id: consoleId,
     cellId,
@@ -81,7 +126,7 @@ export function packageRunOutputs(args: {
     historyId,
   }
 
-  const historyEntry: HistoryEntry = reuse
+  const historyEntry: HistoryEntry = historyReused
     ? {
         ...previousEntry,
         cellName,
@@ -108,5 +153,14 @@ export function packageRunOutputs(args: {
         consoleId,
       }
 
-  return { historyEntry, historyReused: reuse, plot, table, consoleEntry }
+  return {
+    historyEntry,
+    historyReused,
+    plot,
+    plotReused,
+    table,
+    tableReused,
+    consoleEntry,
+    consoleReused,
+  }
 }
