@@ -37,9 +37,9 @@ describe('app settings', () => {
     delete globalThis.localStorage
   })
 
-  it('defaults helperDock to left and rscriptPath to null', async () => {
+  it('defaults helperDock to right and rscriptPath to null', async () => {
     const { loadSettings } = await import('./settings.ts')
-    assert.deepEqual(loadSettings(), { rscriptPath: null, helperDock: 'left' })
+    assert.deepEqual(loadSettings(), { rscriptPath: null, helperDock: 'right' })
   })
 
   it('persists and restores helperDock', async () => {
@@ -49,22 +49,24 @@ describe('app settings', () => {
     assert.equal(loadSettings().helperDock, 'bottom')
     saveSettings({ helperDock: 'top' })
     assert.equal(loadSettings().helperDock, 'top')
+    saveSettings({ helperDock: 'left' })
+    assert.equal(loadSettings().helperDock, 'left')
   })
 
   it('rejects unknown dock values', async () => {
     const { loadSettings, isHelperDock } = await import('./settings.ts')
     assert.equal(isHelperDock('sideways'), false)
     localStorage.setItem('cello.settings.v0', JSON.stringify({ helperDock: 'nope' }))
-    assert.equal(loadSettings().helperDock, 'left')
+    assert.equal(loadSettings().helperDock, 'right')
   })
 
   it('keeps rscriptPath when updating dock', async () => {
     const { loadSettings, saveSettings } = await import('./settings.ts')
     saveSettings({ rscriptPath: '/opt/R/bin/Rscript' })
-    saveSettings({ helperDock: 'right' })
+    saveSettings({ helperDock: 'left' })
     assert.deepEqual(loadSettings(), {
       rscriptPath: '/opt/R/bin/Rscript',
-      helperDock: 'right',
+      helperDock: 'left',
     })
   })
 })

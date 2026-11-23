@@ -13,7 +13,7 @@
  * Cleared / null → kernel host auto-discovers via PATH (and CELLO_RSCRIPT).
  *
  * `helperDock` places the ribbon panel cluster relative to the main editor
- * (default: left — helpers expand leftward).
+ * (default: right — helpers expand rightward).
  */
 import type { HelperDock } from '../types'
 
@@ -28,10 +28,10 @@ export type AppSettings = {
 
 const DEFAULTS: AppSettings = {
   rscriptPath: null,
-  helperDock: 'left',
+  helperDock: 'right',
 }
 
-const DOCKS: readonly HelperDock[] = ['left', 'right', 'top', 'bottom']
+const DOCKS: readonly HelperDock[] = ['right', 'left', 'top', 'bottom']
 
 export function isHelperDock(value: unknown): value is HelperDock {
   return typeof value === 'string' && (DOCKS as readonly string[]).includes(value)

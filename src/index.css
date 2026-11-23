@@ -208,7 +208,7 @@ html.is-desktop .app-shell {
  * Lane height is owned by .main-window → .code-area only. The side shell is
  * absolute so ribbon corners stay flush with the cell frame.
  * Dock side (data-dock on .workspace) reserves padding for the helper cluster.
- * Default dock: left (helpers expand leftward).
+ * Default dock: right (helpers expand rightward).
  */
 .workspace-lane {
   position: relative;
@@ -217,8 +217,8 @@ html.is-desktop .app-shell {
   max-width: none;
   height: auto;
   min-height: 0;
-  padding-left: var(--ribbon-width);
-  padding-right: 0;
+  padding-left: 0;
+  padding-right: var(--ribbon-width);
   padding-top: 0;
   padding-bottom: 0;
   transition:
@@ -230,18 +230,19 @@ html.is-desktop .app-shell {
 }
 
 .workspace.panel-open .workspace-lane,
-.workspace.panel-open[data-dock='left'] .workspace-lane {
-  padding-left: calc(var(--ribbon-width) + var(--panel-width));
-}
-
-.workspace[data-dock='right'] .workspace-lane {
-  padding-left: 0;
-  padding-right: var(--ribbon-width);
-}
-
 .workspace.panel-open[data-dock='right'] .workspace-lane {
   padding-left: 0;
   padding-right: calc(var(--ribbon-width) + var(--panel-width));
+}
+
+.workspace[data-dock='left'] .workspace-lane {
+  padding-left: var(--ribbon-width);
+  padding-right: 0;
+}
+
+.workspace.panel-open[data-dock='left'] .workspace-lane {
+  padding-left: calc(var(--ribbon-width) + var(--panel-width));
+  padding-right: 0;
 }
 
 .workspace[data-dock='top'] .workspace-lane {
@@ -405,6 +406,27 @@ html.is-desktop .app-shell {
   app-region: drag;
 }
 
+/*
+ * Menu placement vs helper dock:
+ * - left dock: header/nav sit over the editor (right of the helper cluster)
+ * - top dock: above-editor menu packs to the right
+ * - bottom dock: below menu packs to the right
+ * - right dock: leave as-is (header/nav already over the editor)
+ */
+.workspace[data-dock='left'] .cell-header,
+.workspace[data-dock='left'] .cell-nav,
+.workspace[data-dock='left'] .cell-editor > .cell-error {
+  align-self: flex-end;
+}
+
+.workspace[data-dock='top'] .cell-header {
+  justify-content: flex-end;
+}
+
+.workspace[data-dock='bottom'] .cell-nav {
+  justify-content: flex-end;
+}
+
 .cell-header button,
 .cell-header input,
 .cell-header select,
@@ -462,10 +484,10 @@ html.is-desktop .app-shell {
   width: max-content;
   max-width: none;
   min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
-  /* Default (left dock): right corners only — left edge meets the ribbon flush. */
-  border-radius: 0 var(--radius) var(--radius) 0;
+  /* Default (right dock): left corners only — right edge meets the ribbon flush. */
+  border-radius: var(--radius) 0 0 var(--radius);
   border: var(--cell-border) solid var(--line);
-  border-left-color: transparent;
+  border-right-color: transparent;
   background: var(--bg-code);
   box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
   /* Syntax colors — warm cello wood on charcoal (enough contrast to read) */
@@ -743,20 +765,20 @@ html.is-desktop .app-shell {
 
 .side-shell {
   position: absolute;
-  /* Default dock: left of the code frame (flush top/bottom). */
+  /* Default dock: right of the code frame (flush top/bottom). */
   top: 0;
-  left: 0;
-  right: auto;
+  left: auto;
+  right: 0;
   bottom: 0;
   height: auto;
   display: flex;
-  /* DOM order is panel-slot then ribbon; reverse so ribbon is outermost left. */
-  flex-direction: row-reverse;
+  /* DOM order is panel-slot then ribbon; row keeps ribbon outermost right. */
+  flex-direction: row;
   align-items: stretch;
   width: var(--ribbon-width);
   border: none;
-  border-right: 1px solid var(--line);
-  border-radius: var(--radius) 0 0 var(--radius);
+  border-left: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) 0;
   background: var(--bg-elevated);
   overflow: hidden;
   transition:
@@ -769,20 +791,21 @@ html.is-desktop .app-shell {
   overflow: hidden;
 }
 
-/* Right dock — previous default layout. */
-.workspace[data-dock='right'] .side-shell {
-  left: auto;
-  right: 0;
-  flex-direction: row;
-  border-right: none;
-  border-left: 1px solid var(--line);
-  border-radius: 0 var(--radius) var(--radius) 0;
+/* Left dock — helpers expand left of the editor. */
+.workspace[data-dock='left'] .side-shell {
+  left: 0;
+  right: auto;
+  /* Reverse so ribbon is outermost left; panel sits against the cell. */
+  flex-direction: row-reverse;
+  border-left: none;
+  border-right: 1px solid var(--line);
+  border-radius: var(--radius) 0 0 var(--radius);
 }
 
-.workspace[data-dock='right'] .code-surface {
-  border-radius: var(--radius) 0 0 var(--radius);
-  border-left-color: var(--line);
-  border-right-color: transparent;
+.workspace[data-dock='left'] .code-surface {
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left-color: transparent;
+  border-right-color: var(--line);
 }
 
 /* Top / bottom docks — horizontal ribbon bar + panel stack. */
@@ -968,11 +991,11 @@ html.is-desktop .app-shell {
   flex-direction: column;
   background: var(--bg-panel);
   border: none;
-  /* Default left dock: seam against the cell on the panel's right edge. */
-  border-right: 1px solid var(--line);
+  /* Default right dock: seam against the cell on the panel's left edge. */
+  border-left: 1px solid var(--line);
   overflow: hidden;
-  /* Default left dock: slide in from the left toward the cell. */
-  transform: translateX(10px);
+  /* Default right dock: slide in from the right toward the cell. */
+  transform: translateX(-10px);
   transition: transform var(--panel-motion);
 }
 
@@ -980,13 +1003,13 @@ html.is-desktop .app-shell {
   transform: translateX(0);
 }
 
-.workspace[data-dock='right'] .side-panel {
-  border-right: none;
-  border-left: 1px solid var(--line);
-  transform: translateX(-10px);
+.workspace[data-dock='left'] .side-panel {
+  border-left: none;
+  border-right: 1px solid var(--line);
+  transform: translateX(10px);
 }
 
-.workspace[data-dock='right'] .side-shell.is-open .side-panel {
+.workspace[data-dock='left'] .side-shell.is-open .side-panel {
   transform: translateX(0);
 }
 
@@ -2054,6 +2077,7 @@ html.is-desktop .app-shell {
   .code-surface {
     min-height: 220px;
     border-radius: var(--radius);
+    border-left-color: var(--line);
     border-right-color: var(--line);
   }
 

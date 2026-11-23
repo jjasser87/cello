@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { HelperDock, PanelId } from '../types'
 
 const HELPER_DOCK_OPTIONS: { id: HelperDock; label: string }[] = [
-  { id: 'left', label: 'Left' },
   { id: 'right', label: 'Right' },
+  { id: 'left', label: 'Left' },
   { id: 'top', label: 'Top' },
   { id: 'bottom', label: 'Bottom' },
 ]
@@ -385,7 +385,8 @@ function SettingsPanel({
           </select>
         </label>
         <p className="palette-settings-note muted small">
-          Ribbon panels (Plot, Console, Data, …) sit on this side of the editor. Default is left.
+          Ribbon panels (Plot, Console, Data, …) sit on this side of the editor. Default is
+          right. Above/below docks keep the matching cell menu on the right.
         </p>
 
         <div className="palette-pref-stack">
