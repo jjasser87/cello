@@ -27,6 +27,11 @@ export type SidecarUi = {
   helperDock?: HelperDock
   saveOutputs?: boolean
   hideSidecar?: boolean
+  /**
+   * Custom-locked Flow Mermaid source. Omitted / null = auto mode.
+   * A string (including empty) means the user edited Flow; keep until Reset.
+   */
+  flowMermaid?: string | null
 }
 
 export type SidecarHistoryDoc = {
@@ -72,6 +77,7 @@ export function buildSidecarUi(state: WorkspaceState): SidecarUi {
     helperDock: state.helperDock,
     saveOutputs: state.saveOutputs,
     hideSidecar: state.hideSidecar,
+    flowMermaid: state.flowMermaid,
   }
 }
 
@@ -113,6 +119,12 @@ export function parseSidecarUi(raw: unknown): SidecarUi {
         : undefined,
     saveOutputs: typeof raw.saveOutputs === 'boolean' ? raw.saveOutputs : undefined,
     hideSidecar: typeof raw.hideSidecar === 'boolean' ? raw.hideSidecar : undefined,
+    flowMermaid:
+      typeof raw.flowMermaid === 'string'
+        ? raw.flowMermaid
+        : raw.flowMermaid === null
+          ? null
+          : undefined,
   }
 }
 

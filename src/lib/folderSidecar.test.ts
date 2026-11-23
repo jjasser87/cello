@@ -82,6 +82,7 @@ function baseState(over: Partial<WorkspaceState> = {}): WorkspaceState {
     filesSource: 'disk',
     saveOutputs: false,
     hideSidecar: true,
+    flowMermaid: null,
     ...over,
   }
 }
@@ -129,5 +130,24 @@ describe('folder sidecar (structure B)', () => {
     })
     assert.equal(entries.length, 1)
     assert.equal(entries[0].id, 'h')
+  })
+
+  it('persists custom Flow Mermaid in ui.json and restores it', () => {
+    const custom = 'flowchart TD\n  n_a["Custom"]\n'
+    const state = baseState({ flowMermaid: custom, activePanel: 'structure' })
+    const uiDoc = buildSidecarUi(state)
+    assert.equal(uiDoc.flowMermaid, custom)
+    const loaded = mergeParsedSidecar({
+      uiText: stringifySidecarDoc(uiDoc),
+    })
+    assert.equal(loaded.ui.flowMermaid, custom)
+
+    const autoState = baseState({ flowMermaid: null })
+    const autoUi = buildSidecarUi(autoState)
+    assert.equal(autoUi.flowMermaid, null)
+    const loadedAuto = mergeParsedSidecar({
+      uiText: stringifySidecarDoc(autoUi),
+    })
+    assert.equal(loadedAuto.ui.flowMermaid, null)
   })
 })

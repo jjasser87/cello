@@ -28,6 +28,7 @@
     "test:rscript-lookup": "node --experimental-strip-types --test server/findRscript.test.ts",
     "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
     "test:flow-graph": "node --experimental-strip-types --test src/lib/flowGraph.test.ts",
+    "test:flow-mermaid": "node --experimental-strip-types --test src/lib/flowMermaid.test.ts",
     "test:explanation": "node --experimental-strip-types --test src/lib/explanation.test.ts",
     "test:project-file": "node --experimental-strip-types --test src/lib/projectFile.test.ts",
     "test:r-completions": "node --experimental-strip-types --test src/lib/rCompletions.test.ts",
@@ -42,7 +43,7 @@
     "test:folder-save-writes": "node --experimental-strip-types --test src/lib/folderSaveWrites.test.ts",
     "test:folder-sidecar": "node --experimental-strip-types --test src/lib/folderSidecar.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:format-timestamp && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:format-timestamp && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
   },
   "dependencies": {
     "react": "^19.3.1",

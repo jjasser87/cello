@@ -13,6 +13,12 @@ export { hydratePersistedCell }
 
 const KEY_V1 = 'cello.workspace.v1'
 const KEY_V0 = 'cello.workspace.v0'
+/** Memory-mode UI prefs (Flow custom Mermaid, etc.) — mirrors `.cello/ui.json`. */
+const KEY_UI = 'cello.ui.v1'
+
+export type WorkspaceUiPrefs = {
+  flowMermaid: string | null
+}
 
 /**
  * Workspace persistence (localStorage) — same schema as the downloadable
@@ -20,11 +26,13 @@ const KEY_V0 = 'cello.workspace.v0'
  *
  * Runtime artifacts (plots, tables, env, history, console) are not stored.
  * Plain script export (`⇩` / `cellsToScript`) stays code-only with cell markers.
+ * Flow custom Mermaid is stored separately under `cello.ui.v1` (UI state).
  */
 export function saveWorkspace(state: WorkspaceState): { ok: true } | { ok: false; error: string } {
   const project = serializeProject(state)
   try {
     localStorage.setItem(KEY_V1, stringifyProject(project))
+    saveWorkspaceUi({ flowMermaid: state.flowMermaid ?? null })
     // Drop legacy key once v1 is written successfully.
     try {
       localStorage.removeItem(KEY_V0)
@@ -35,6 +43,26 @@ export function saveWorkspace(state: WorkspaceState): { ok: true } | { ok: false
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     return { ok: false, error: message || 'localStorage write failed' }
+  }
+}
+
+export function saveWorkspaceUi(ui: WorkspaceUiPrefs): void {
+  try {
+    localStorage.setItem(KEY_UI, JSON.stringify({ version: 1, flowMermaid: ui.flowMermaid }))
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export function loadWorkspaceUi(): WorkspaceUiPrefs {
+  try {
+    const raw = localStorage.getItem(KEY_UI)
+    if (!raw) return { flowMermaid: null }
+    const parsed = JSON.parse(raw) as { flowMermaid?: unknown }
+    if (typeof parsed.flowMermaid === 'string') return { flowMermaid: parsed.flowMermaid }
+    return { flowMermaid: null }
+  } catch {
+    return { flowMermaid: null }
   }
 }
 
