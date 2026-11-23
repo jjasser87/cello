@@ -167,7 +167,7 @@ function CellsPanel({ api }: SidePanelProps) {
 }
 
 function HistoryPanel({ api }: SidePanelProps) {
-  const { state, setHistoryIndex } = api
+  const { state, setHistoryIndex, revertCodeHistory } = api
   const cellHistory = state.history.filter((entry) => entry.cellId === state.activeCellId)
   if (cellHistory.length === 0) {
     return <EmptyState text="No code history for this cell yet. Run it to keep prior source." />
@@ -181,6 +181,7 @@ function HistoryPanel({ api }: SidePanelProps) {
   }
   const entry = cellHistory[localIndex]
   const lines = diffLines(entry.previousCode, entry.code)
+  const canRevert = localIndex < cellHistory.length - 1
   const goToLocal = (nextLocal: number) => {
     const target = cellHistory[nextLocal]
     if (!target) return
@@ -207,8 +208,21 @@ function HistoryPanel({ api }: SidePanelProps) {
             {entry.status === 'error' ? ' · error' : ''}
           </div>
           <p className="muted small history-restore-hint">
-            Selecting a version restores that source into the cell.
+            Browse restores the source. Revert also deletes newer versions.
           </p>
+          <button
+            type="button"
+            className="history-revert-btn"
+            disabled={!canRevert}
+            title={
+              canRevert
+                ? 'Restore this version and delete every newer code history entry for this cell'
+                : 'Already at the latest version'
+            }
+            onClick={() => revertCodeHistory(entry.id)}
+          >
+            Revert
+          </button>
         </div>
         <button
           type="button"
@@ -286,7 +300,7 @@ function HistoryPanel({ api }: SidePanelProps) {
 }
 
 function PlotPanel({ api }: SidePanelProps) {
-  const { state, setActivePlotId } = api
+  const { state, setActivePlotId, revertPlotHistory } = api
   const cellPlots = state.plots.filter((item) => item.cellId === state.activeCellId)
   const plot =
     cellPlots.find((item) => item.id === state.activePlotId) ??
@@ -299,6 +313,7 @@ function PlotPanel({ api }: SidePanelProps) {
   }
 
   const localIndex = cellPlots.findIndex((item) => item.id === plot.id)
+  const canRevert = localIndex < cellPlots.length - 1
 
   return (
     <div className="plot-panel">
@@ -321,8 +336,21 @@ function PlotPanel({ api }: SidePanelProps) {
             {new Date(plot.createdAt).toLocaleTimeString()}
           </div>
           <p className="muted small history-restore-hint">
-            Selecting a plot restores the code that produced it.
+            Browse restores the code. Revert also deletes newer plots.
           </p>
+          <button
+            type="button"
+            className="history-revert-btn"
+            disabled={!canRevert}
+            title={
+              canRevert
+                ? 'Restore this plot’s code and delete every newer plot for this cell'
+                : 'Already at the latest plot'
+            }
+            onClick={() => revertPlotHistory(plot.id)}
+          >
+            Revert
+          </button>
         </div>
         <button
           type="button"
@@ -487,7 +515,7 @@ function EnvPanel({ api }: SidePanelProps) {
 }
 
 function DataPanel({ api }: SidePanelProps) {
-  const { state, setActiveTableId } = api
+  const { state, setActiveTableId, revertTableHistory } = api
   const cellTables = state.tables.filter((item) => item.cellId === state.activeCellId)
   const table =
     cellTables.find((item) => item.id === state.activeTableId) ??
@@ -500,6 +528,7 @@ function DataPanel({ api }: SidePanelProps) {
   }
 
   const localIndex = cellTables.findIndex((item) => item.id === table.id)
+  const canRevert = localIndex < cellTables.length - 1
 
   return (
     <div className="data-panel">
@@ -522,8 +551,21 @@ function DataPanel({ api }: SidePanelProps) {
             {table.columns.length} cols · {new Date(table.createdAt).toLocaleTimeString()}
           </div>
           <p className="muted small history-restore-hint">
-            Selecting a table restores the code that produced it.
+            Browse restores the code. Revert also deletes newer tables.
           </p>
+          <button
+            type="button"
+            className="history-revert-btn"
+            disabled={!canRevert}
+            title={
+              canRevert
+                ? 'Restore this table’s code and delete every newer table for this cell'
+                : 'Already at the latest table'
+            }
+            onClick={() => revertTableHistory(table.id)}
+          >
+            Revert
+          </button>
         </div>
         <button
           type="button"
@@ -667,7 +709,7 @@ function AiPanel({ api }: SidePanelProps) {
 }
 
 function ConsolePanel({ api }: SidePanelProps) {
-  const { state, setActiveConsoleId } = api
+  const { state, setActiveConsoleId, revertConsoleHistory } = api
   const cellRuns = state.consoleEntries.filter((entry) => entry.cellId === state.activeCellId)
   const entry =
     cellRuns.find((item) => item.id === state.activeConsoleId) ??
@@ -678,6 +720,7 @@ function ConsolePanel({ api }: SidePanelProps) {
   }
 
   const localIndex = cellRuns.findIndex((item) => item.id === entry.id)
+  const canRevert = localIndex < cellRuns.length - 1
 
   return (
     <div className="console-panel">
@@ -701,8 +744,21 @@ function ConsolePanel({ api }: SidePanelProps) {
             {entry.status === 'error' ? ' · error' : ''}
           </div>
           <p className="muted small history-restore-hint">
-            Selecting a run restores the code that produced it.
+            Browse restores the code. Revert also deletes newer runs.
           </p>
+          <button
+            type="button"
+            className="history-revert-btn"
+            disabled={!canRevert}
+            title={
+              canRevert
+                ? 'Restore this run’s code and delete every newer console run for this cell'
+                : 'Already at the latest run'
+            }
+            onClick={() => revertConsoleHistory(entry.id)}
+          >
+            Revert
+          </button>
         </div>
         <button
           type="button"

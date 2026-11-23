@@ -9,6 +9,148 @@ export function restoreCellCode(cells: Cell[], cellId: string, sourceCode: strin
   )
 }
 
+/**
+ * Keep this cell's series through `keepId` (inclusive, in array order) and drop
+ * every newer entry for that cell. Entries for other cells are unchanged.
+ */
+export function truncateCellSeries<T extends { id: string; cellId: string }>(
+  items: T[],
+  cellId: string,
+  keepId: string,
+): T[] {
+  const cellItems = items.filter((item) => item.cellId === cellId)
+  const keepIndex = cellItems.findIndex((item) => item.id === keepId)
+  if (keepIndex < 0) return items
+  const keepIds = new Set(cellItems.slice(0, keepIndex + 1).map((item) => item.id))
+  return items.filter((item) => item.cellId !== cellId || keepIds.has(item.id))
+}
+
+/** Drop plot / table / console priors for a cell whose historyId was discarded. */
+export function dropArtifactsForDiscardedHistory<
+  T extends { cellId: string; historyId?: string; id: string },
+>(items: T[], cellId: string, keptHistoryIds: Set<string>): T[] {
+  return items.filter((item) => {
+    if (item.cellId !== cellId) return true
+    if (item.historyId) return keptHistoryIds.has(item.historyId)
+    return true
+  })
+}
+
+export type CodeHistoryRevertResult = {
+  cells: Cell[]
+  history: HistoryEntry[]
+  historyIndex: number
+  plots: PlotSpec[]
+  tables: DataTable[]
+  consoleEntries: ConsoleEntry[]
+  activePlotId: string | null
+  activeTableId: string | null
+  activeConsoleId: string | null
+  activeCellId: string
+}
+
+/**
+ * Restore cell code to a history entry and truncate forward: drop newer code
+ * history for that cell, plus linked plot/console/data priors for discarded runs.
+ */
+export function applyCodeHistoryRevert(
+  state: {
+    cells: Cell[]
+    history: HistoryEntry[]
+    plots: PlotSpec[]
+    tables: DataTable[]
+    consoleEntries: ConsoleEntry[]
+    activePlotId: string | null
+    activeTableId: string | null
+    activeConsoleId: string | null
+  },
+  entryId: string,
+): CodeHistoryRevertResult | null {
+  const entry = state.history.find((item) => item.id === entryId)
+  if (!entry) return null
+  if (!state.cells.some((cell) => cell.id === entry.cellId)) return null
+
+  const history = truncateCellSeries(state.history, entry.cellId, entryId)
+  const keptHistoryIds = new Set(
+    history.filter((item) => item.cellId === entry.cellId).map((item) => item.id),
+  )
+  const plots = dropArtifactsForDiscardedHistory(state.plots, entry.cellId, keptHistoryIds)
+  const tables = dropArtifactsForDiscardedHistory(state.tables, entry.cellId, keptHistoryIds)
+  const consoleEntries = dropArtifactsForDiscardedHistory(
+    state.consoleEntries,
+    entry.cellId,
+    keptHistoryIds,
+  )
+  const historyIndex = history.findIndex((item) => item.id === entryId)
+  const keptEntry = history[historyIndex]
+
+  return {
+    cells: restoreCellCode(state.cells, entry.cellId, entry.code),
+    history,
+    historyIndex,
+    plots,
+    tables,
+    consoleEntries,
+    activeCellId: entry.cellId,
+    activePlotId: pickActiveId(plots, entry.cellId, keptEntry?.plotId ?? null, state.activePlotId),
+    activeTableId: pickActiveId(
+      tables,
+      entry.cellId,
+      keptEntry?.dataId ?? null,
+      state.activeTableId,
+    ),
+    activeConsoleId: pickActiveId(
+      consoleEntries,
+      entry.cellId,
+      keptEntry?.consoleId ?? null,
+      state.activeConsoleId,
+    ),
+  }
+}
+
+function pickActiveId<T extends { id: string; cellId: string }>(
+  items: T[],
+  cellId: string,
+  preferredId: string | null,
+  previousActive: string | null,
+): string | null {
+  if (preferredId && items.some((item) => item.id === preferredId)) return preferredId
+  if (previousActive && items.some((item) => item.id === previousActive)) return previousActive
+  const cellItems = items.filter((item) => item.cellId === cellId)
+  return cellItems[cellItems.length - 1]?.id ?? null
+}
+
+/** Restore + truncate a typed prior series (plot / table / console) for one cell. */
+export function applyTypedHistoryRevert<T extends { id: string; cellId: string }>(args: {
+  items: T[]
+  keepId: string
+  cellId: string
+  sourceCode: string | null
+  cells: Cell[]
+  history: HistoryEntry[]
+  historyId?: string
+}): {
+  items: T[]
+  cells: Cell[]
+  activeId: string
+  activeCellId: string
+  historyIndex: number
+} | null {
+  const { items, keepId, cellId, sourceCode, cells, history, historyId } = args
+  if (!items.some((item) => item.id === keepId && item.cellId === cellId)) return null
+  const nextItems = truncateCellSeries(items, cellId, keepId)
+  const historyIndex = historyId
+    ? history.findIndex((entry) => entry.id === historyId)
+    : -1
+  return {
+    items: nextItems,
+    cells: sourceCode ? restoreCellCode(cells, cellId, sourceCode) : cells,
+    activeId: keepId,
+    activeCellId: cellId,
+    historyIndex,
+  }
+}
+
 export function sourceCodeForPlot(
   plot: PlotSpec,
   history: HistoryEntry[],

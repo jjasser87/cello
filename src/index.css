@@ -1452,6 +1452,27 @@ html.is-desktop .workspace {
   margin: 0.25rem 0 0;
 }
 
+.history-revert-btn {
+  margin-top: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--wood) 55%, transparent);
+  background: transparent;
+  color: var(--wood-bright);
+  cursor: pointer;
+}
+
+.history-revert-btn:hover:not(:disabled) {
+  border-color: var(--wood-bright);
+  background: color-mix(in srgb, var(--wood) 18%, transparent);
+}
+
+.history-revert-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .panel-run-list {
   list-style: none;
   margin: 0;
