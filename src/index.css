@@ -496,6 +496,8 @@ html.is-desktop .workspace {
   display: block;
   width: max-content;
   max-width: none;
+  /* Frame size comes from the fixed .code-area; overflow scrolls inside it. */
+  height: auto;
   min-height: max(220px, var(--ribbon-track-min));
   /* Default (right dock): left corners only — right edge meets the ribbon flush. */
   border-radius: var(--radius) 0 0 var(--radius);
@@ -503,6 +505,7 @@ html.is-desktop .workspace {
   border-right-color: transparent;
   background: var(--bg-code);
   box-shadow: inset 0 0 0 1px rgba(196, 138, 58, 0.04);
+  overflow: hidden;
   /* Syntax colors — warm cello wood on charcoal (enough contrast to read) */
   --tok-comment: #6a635b;
   --tok-string: #e0b07a;
@@ -531,7 +534,6 @@ html.is-desktop .workspace {
   letter-spacing: 0;
   white-space: pre;
   tab-size: 2;
-  overflow: hidden;
 }
 
 .code-highlight {
@@ -541,9 +543,18 @@ html.is-desktop .workspace {
   box-sizing: border-box;
   width: auto;
   max-width: none;
+  height: 100%;
+  /* Scroll position synced from .code-area; hide native chrome on this layer. */
+  overflow: hidden;
   pointer-events: none;
   color: var(--ink);
   background: transparent;
+  scrollbar-width: none;
+}
+
+.code-highlight::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .code-area {
@@ -553,12 +564,16 @@ html.is-desktop .workspace {
   box-sizing: content-box;
   /* Writing surface is exactly 80 monospace columns; padding sits outside. */
   width: 80ch;
-  max-width: none;
+  max-width: 80ch;
   /*
-   * Height tracks content (CellEditor sets inline height). No inner scroll in
-   * the editor — helpers scroll inside their fixed panel instead.
+   * Fixed height matching the ribbon track. Extra lines and columns scroll
+   * inside the editor — layout and Electron window stay put.
    */
+  height: max(220px, var(--ribbon-track-min));
   min-height: max(220px, var(--ribbon-track-min));
+  max-height: max(220px, var(--ribbon-track-min));
+  overflow: auto;
+  overscroll-behavior: contain;
   resize: none;
   background: transparent;
   /* Ink lives on the highlight layer; caret stays visible. */

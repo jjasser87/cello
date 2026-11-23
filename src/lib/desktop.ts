@@ -63,6 +63,7 @@ export function markDesktopDocument(): void {
 /**
  * Measure the editor cluster (+ workspace padding + title drag strip) so the
  * OS window can hug the cell and grow/shrink with ribbon panels.
+ * Editor source length must not change this size — overflow scrolls in-cell.
  */
 export function measureDesktopFitSize(): { width: number; height: number } | null {
   if (typeof document === 'undefined') return null
