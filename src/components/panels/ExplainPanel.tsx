@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { renderExplanationHtml } from '../../lib/explanation'
+import { formatPanelTimestamp } from '../../lib/formatTimestamp'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { ExplanationComment } from '../../types'
 
@@ -138,17 +139,13 @@ function ExplainPanelBody({
 }
 
 function CommentItem({ comment }: { comment: ExplanationComment }) {
-  const when = new Date(comment.createdAt).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
   return (
     <li className="explain-comment">
       <div className="explain-comment-meta">
         <span className="explain-comment-author">{comment.author}</span>
-        <time dateTime={new Date(comment.createdAt).toISOString()}>{when}</time>
+        <time dateTime={new Date(comment.createdAt).toISOString()}>
+          {formatPanelTimestamp(comment.createdAt)}
+        </time>
       </div>
       <p className="explain-comment-body">{comment.body}</p>
     </li>
