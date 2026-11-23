@@ -1953,9 +1953,15 @@ html.is-desktop .workspace {
   margin: 0;
 }
 
+/*
+ * Data / env tables size columns from cell content (not header alone).
+ * Row strings stay on one line; wide tables scroll horizontally in .table-scroll.
+ */
 .data-table {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
+  table-layout: auto;
   font-size: 0.84rem;
 }
 
@@ -1965,6 +1971,11 @@ html.is-desktop .workspace {
   padding: 0.4rem 0.45rem;
   text-align: left;
   vertical-align: top;
+  white-space: nowrap;
+  /* Cap extreme cells so one runaway string cannot blow out the panel. */
+  max-width: 24rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .data-table th {
@@ -1973,10 +1984,19 @@ html.is-desktop .workspace {
 }
 
 .table-scroll {
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: visible;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--bg-code);
+}
+
+.table-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .flow-list {
