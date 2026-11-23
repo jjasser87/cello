@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { DATA_TABLE_LAYOUT } from './dataTableLayout.ts'
 
 const cssPath = join(dirname(fileURLToPath(import.meta.url)), '../index.css')
-const css = readFileSync(cssPath, 'utf8')
+/** Normalize CRLF so Windows CI matches the same selectors as local LF checkouts. */
+const css = readFileSync(cssPath, 'utf8').replace(/\r\n/g, '\n')
 
 function ruleBlock(selector: string): string {
   const pattern = new RegExp(
