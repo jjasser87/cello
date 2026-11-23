@@ -174,6 +174,13 @@ export default function App() {
         return
       }
 
+      // ⌘/Ctrl+S — save folder project (cello.json + .cello/) or download .cello.
+      if (mod && !event.shiftKey && (event.key === 's' || event.key === 'S')) {
+        event.preventDefault()
+        saveProject()
+        return
+      }
+
       // Alt+↑ / Alt+↓ — jump cells (also handled inside the textarea).
       if (event.altKey && !mod && !paletteOpen) {
         if (event.key === 'ArrowUp') {
@@ -203,7 +210,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [runCell, goPrevCell, goNextCell, paletteOpen])
+  }, [runCell, goPrevCell, goNextCell, paletteOpen, saveProject])
 
   const exportScript = () => {
     const blob = new Blob([api.exportScript()], { type: 'text/plain' })

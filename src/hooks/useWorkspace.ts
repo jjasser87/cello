@@ -26,13 +26,24 @@ import {
   serializeFolderManifest,
   stringifyFolderManifest,
   MANIFEST_NAME,
+  SIDECAR_DIR,
 } from '../lib/folderProject'
+import {
+  ARTIFACTS_FILE,
+  HISTORY_FILE,
+  RUNS_DIR,
+  UI_FILE,
+  mergeParsedSidecar,
+  planSidecarWrites,
+  sidecarAbsolute,
+} from '../lib/folderSidecar'
 import {
   diskEntriesToProjectFiles,
   folderDisplayName,
   joinProjectPath,
   listProjectFolder,
   openProjectFolder,
+  readProjectText,
   setKernelProjectCwd,
   writeProjectText,
 } from '../lib/projectFs'
@@ -632,25 +643,52 @@ export function useWorkspace() {
     sharedRef.current = createSharedBag()
     await setKernelProjectCwd(picked.root)
 
+    // Restore structure B sidecar: history always; runs when previously saved.
+    const [historyFile, uiFile, artifactsFile] = await Promise.all([
+      readProjectText(sidecarAbsolute(picked.root, HISTORY_FILE)),
+      readProjectText(sidecarAbsolute(picked.root, UI_FILE)),
+      readProjectText(sidecarAbsolute(picked.root, RUNS_DIR, ARTIFACTS_FILE)),
+    ])
+    const sidecar = mergeParsedSidecar({
+      historyText: historyFile.ok ? historyFile.text : null,
+      uiText: uiFile.ok ? uiFile.text : null,
+      artifactsText: artifactsFile.ok ? artifactsFile.text : null,
+    })
+
     setState((prev) => {
       const next = buildFromProject(asV1, {
         kernelStatus: prev.kernelStatus,
         consoleLines: [
           picked.created
-            ? `Initialized Cello project in ${picked.root} (wrote ${MANIFEST_NAME}).`
+            ? `Initialized Cello project in ${picked.root} (wrote ${MANIFEST_NAME} + ${SIDECAR_DIR}/).`
             : `Opened folder project “${parsed.project.meta.name}” · ${picked.root}`,
         ],
         sidePanelOpen: true,
       })
+      const activeFromUi =
+        sidecar.ui.activeCellId &&
+        next.cells.some((cell) => cell.id === sidecar.ui.activeCellId)
+          ? sidecar.ui.activeCellId
+          : next.activeCellId
       return {
         ...next,
         files: diskFiles,
         projectRoot: picked.root,
         filesSource: 'disk',
-        saveOutputs: false,
-        hideSidecar: true,
-        activePanel: 'files',
+        saveOutputs: sidecar.ui.saveOutputs ?? false,
+        hideSidecar: sidecar.ui.hideSidecar ?? true,
+        helperDock: sidecar.ui.helperDock ?? next.helperDock,
+        activeCellId: activeFromUi,
+        activePanel: sidecar.ui.activePanel ?? 'files',
         sidePanelOpen: true,
+        history: sidecar.history,
+        historyIndex: sidecar.historyIndex,
+        plots: sidecar.plots,
+        tables: sidecar.tables,
+        consoleEntries: sidecar.consoleEntries,
+        activePlotId: sidecar.activePlotId,
+        activeTableId: sidecar.activeTableId,
+        activeConsoleId: sidecar.activeConsoleId,
         meta: {
           ...next.meta,
           name: parsed.project.meta.name || folderName,
@@ -673,18 +711,38 @@ export function useWorkspace() {
     if (!snapshot.projectRoot || snapshot.filesSource !== 'disk') {
       return { ok: false, error: 'No folder project is open' }
     }
+
+    // Lean manifest: cells (code/name/explain/comments), language, meta, selection.
     const manifest = serializeFolderManifest(snapshot)
+    if (manifest.cells.length === 0 || manifest.cells.every((cell) => !cell.code.trim())) {
+      // Still allow empty Untitled cells, but never write a stub that drops live cells.
+      if (snapshot.cells.length === 0) {
+        return { ok: false, error: 'Nothing to save — project has no cells' }
+      }
+    }
     const target = joinProjectPath(snapshot.projectRoot, MANIFEST_NAME)
     const written = await writeProjectText(target, stringifyFolderManifest(manifest))
     if (!written.ok) return written
 
-    // Opt-in runs persistence can land later; sidecar dir is created on init.
+    // Sidecar: history + ui always; runs/artifacts when Save outputs is on.
+    const plan = planSidecarWrites(snapshot)
+    for (const file of plan.files) {
+      const abs = joinProjectPath(snapshot.projectRoot, file.relativePath)
+      const side = await writeProjectText(abs, file.contents)
+      if (!side.ok) return side
+    }
+
+    const sideBits = [
+      `${SIDECAR_DIR}/${HISTORY_FILE}`,
+      `${SIDECAR_DIR}/${UI_FILE}`,
+      snapshot.saveOutputs ? `${SIDECAR_DIR}/${RUNS_DIR}/${ARTIFACTS_FILE}` : null,
+    ].filter(Boolean)
     setState((prev) => ({
       ...prev,
       meta: { ...prev.meta, updatedAt: Date.now() },
       consoleLines: [
         ...prev.consoleLines,
-        `Saved ${MANIFEST_NAME}${prev.saveOutputs ? ' (+ outputs opt-in pending flush)' : ''}.`,
+        `Saved ${MANIFEST_NAME} (${manifest.cells.length} cells) + ${sideBits.join(', ')}.`,
       ].slice(-200),
     }))
     await refreshDiskFiles()

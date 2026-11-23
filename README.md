@@ -210,7 +210,7 @@ Durable save format: a JSON document with `"format": "cello-project"` / `"versio
 
 Autosave writes the same payload to `localStorage` (`cello.workspace.v1`; v0 payloads migrate on load). Runtime plots / tables / env / history are not persisted — they rebuild on run. Flow graphs are derived from cells (no separate Mermaid blob).
 
-Command palette (`⌘/Ctrl+Shift+P`): **Open folder…** (desktop: native picker → `cello.json` + `.cello/`; R `setwd` to that folder while the worker process cwd stays on the app root), **New project**, **Save project…** (writes `cello.json` in a folder project, or downloads `name.cello`), **Open .cello file…**.
+Command palette (`⌘/Ctrl+Shift+P`): **Open folder…** (desktop: native picker → `cello.json` + `.cello/`; R `setwd` to that folder while the worker process cwd stays on the app root), **New project**, **Save project…** / **⌘/Ctrl+S** (folder project: lean `cello.json` with cells/code/explain/comments + `.cello/history.json` / `ui.json`; opt-in **Save outputs** writes `.cello/runs/artifacts.json`; otherwise downloads `name.cello`), **Open .cello file…**.
 
 Plain-text script export (`⇩`) remains code-only with `# %%` / `// %%` markers — explanations are **not** embedded in `.R` / `.js` files.
 
