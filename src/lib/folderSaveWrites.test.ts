@@ -87,6 +87,7 @@ describe('folder Save writes (existing project, no analysis.R yet)', () => {
         filesSource: 'disk' as const,
         saveOutputs: false,
         hideSidecar: true,
+        flowMermaid: null,
         sidePanelOpen: true,
         helperDock: 'right' as const,
         kernelStatus: {

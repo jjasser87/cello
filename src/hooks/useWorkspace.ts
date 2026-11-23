@@ -63,7 +63,7 @@ import {
   sourceCodeForPlot,
   sourceCodeForTable,
 } from '../lib/panelRestore'
-import { loadWorkspace, saveWorkspace } from '../lib/storage'
+import { loadWorkspace, loadWorkspaceUi, saveWorkspace } from '../lib/storage'
 import type {
   Cell,
   HistoryEntry,
@@ -108,6 +108,7 @@ function buildFromProject(
     filesSource: 'virtual',
     saveOutputs: false,
     hideSidecar: true,
+    flowMermaid: null,
   }
 }
 
@@ -145,12 +146,16 @@ function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName())
     filesSource: 'virtual',
     saveOutputs: false,
     hideSidecar: true,
+    flowMermaid: null,
   }
 }
 
 function buildInitial(): WorkspaceState {
   const saved = loadWorkspace()
-  if (saved) return buildFromProject(saved)
+  const ui = loadWorkspaceUi()
+  if (saved) {
+    return { ...buildFromProject(saved), flowMermaid: ui.flowMermaid }
+  }
   return buildFresh('r')
 }
 
@@ -265,6 +270,7 @@ export function useWorkspace() {
       filesSource: 'virtual' as const,
       saveOutputs: false,
       hideSidecar: true,
+      flowMermaid: state.flowMermaid,
     }),
     [
       state.cells,
@@ -277,6 +283,7 @@ export function useWorkspace() {
       state.scriptPath,
       state.files,
       state.meta,
+      state.flowMermaid,
     ],
   )
 
@@ -531,6 +538,7 @@ export function useWorkspace() {
         ].slice(-200),
         activePanel: 'cells',
         sidePanelOpen: false,
+        flowMermaid: null,
       }
     })
     if (language === 'r') {
@@ -690,6 +698,8 @@ export function useWorkspace() {
         saveOutputs: sidecar.ui.saveOutputs ?? false,
         hideSidecar: sidecar.ui.hideSidecar ?? true,
         helperDock: sidecar.ui.helperDock ?? next.helperDock,
+        flowMermaid:
+          typeof sidecar.ui.flowMermaid === 'string' ? sidecar.ui.flowMermaid : null,
         activeCellId: activeFromUi,
         activePanel: sidecar.ui.activePanel ?? 'files',
         sidePanelOpen: true,
@@ -761,6 +771,10 @@ export function useWorkspace() {
     await refreshDiskFiles()
     return { ok: true }
   }, [refreshDiskFiles])
+
+  const setFlowMermaid = useCallback((flowMermaid: string | null) => {
+    setState((prev) => (prev.flowMermaid === flowMermaid ? prev : { ...prev, flowMermaid }))
+  }, [])
 
   const setHideSidecar = useCallback((hideSidecar: boolean) => {
     setState((prev) => ({ ...prev, hideSidecar }))
@@ -1501,6 +1515,7 @@ export function useWorkspace() {
       ],
       activePanel: 'cells',
       sidePanelOpen: false,
+      flowMermaid: null,
       meta: { ...prev.meta, updatedAt: Date.now() },
     }))
   }, [])
@@ -1572,6 +1587,7 @@ export function useWorkspace() {
     openFolder,
     saveFolderProject,
     refreshDiskFiles,
+    setFlowMermaid,
     setHideSidecar,
     setSaveOutputs,
     renameProject,

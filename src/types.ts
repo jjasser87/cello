@@ -156,4 +156,9 @@ export interface WorkspaceState {
   saveOutputs: boolean
   /** Hide `.cello/` in the Files panel (default true). */
   hideSidecar: boolean
+  /**
+   * Flow Mermaid custom lock (ephemeral graph → stored in `.cello/ui.json`).
+   * `null` = auto-regenerate from cells; string = user-edited source until Reset.
+   */
+  flowMermaid: string | null
 }

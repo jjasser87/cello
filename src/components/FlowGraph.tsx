@@ -1,16 +1,29 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   buildFlowGraph,
-  toMermaid,
   type FlowEdge,
   type FlowNode,
 } from '../lib/flowGraph'
+import {
+  DEFAULT_FLOW_MODE,
+  applyFlowMermaidEdit,
+  cellIdForFlowNode,
+  isCustomFlow,
+  parseMermaidFlowchart,
+  resetFlowMermaid,
+  resolveFlowMermaid,
+  type FlowMermaidCustom,
+  type FlowMode,
+} from '../lib/flowMermaid'
 import type { Cell, KernelLanguage } from '../types'
 
 interface FlowGraphProps {
   cells: Cell[]
   language: KernelLanguage
   activeCellId: string
+  /** null = auto; string = custom-locked Mermaid source. */
+  flowMermaid: FlowMermaidCustom
+  onFlowMermaidChange: (next: FlowMermaidCustom) => void
   onSelect: (cellId: string) => void
 }
 
@@ -20,117 +33,216 @@ const V_GAP = 28
 const PAD_X = 24
 const PAD_Y = 12
 
-export function FlowGraphView({ cells, language, activeCellId, onSelect }: FlowGraphProps) {
-  const graph = useMemo(() => buildFlowGraph(cells, language), [cells, language])
-  const mermaid = useMemo(
-    () => toMermaid(graph.nodes, graph.edges, activeCellId),
-    [graph.nodes, graph.edges, activeCellId],
+export function FlowGraphView({
+  cells,
+  language,
+  activeCellId,
+  flowMermaid,
+  onFlowMermaidChange,
+  onSelect,
+}: FlowGraphProps) {
+  const [mode, setMode] = useState<FlowMode>(DEFAULT_FLOW_MODE)
+
+  const autoGraph = useMemo(() => buildFlowGraph(cells, language), [cells, language])
+  const autoMermaid = autoGraph.mermaid
+  const custom = isCustomFlow(flowMermaid)
+  const source = resolveFlowMermaid(autoMermaid, flowMermaid)
+
+  const cellStatuses = useMemo(() => {
+    const map: Record<string, Cell['status']> = {}
+    for (const cell of cells) map[cell.id] = cell.status
+    return map
+  }, [cells])
+
+  const parsed = useMemo(
+    () => parseMermaidFlowchart(source, { activeCellId, cellStatuses }),
+    [source, activeCellId, cellStatuses],
   )
-  const layout = useMemo(() => layoutGraph(graph.nodes, graph.edges), [graph.nodes, graph.edges])
+
+  const previewNodes: FlowNode[] = parsed.ok
+    ? parsed.nodes
+    : custom
+      ? []
+      : autoGraph.nodes
+  const previewEdges: FlowEdge[] = parsed.ok
+    ? parsed.edges
+    : custom
+      ? []
+      : autoGraph.edges
+
+  const layout = useMemo(
+    () => layoutGraph(previewNodes, previewEdges),
+    [previewNodes, previewEdges],
+  )
 
   if (cells.length === 0) {
     return <div className="empty-state">No cells yet. Add one to see Flow.</div>
   }
 
+  const handleEdit = (text: string) => {
+    onFlowMermaidChange(applyFlowMermaidEdit(text, autoMermaid))
+  }
+
+  const handleReset = () => {
+    onFlowMermaidChange(resetFlowMermaid())
+    setMode('preview')
+  }
+
+  const handleNodeSelect = (node: FlowNode) => {
+    const cellId = cellIdForFlowNode(node.id, node.label, cells)
+    if (cellId) onSelect(cellId)
+  }
+
   return (
     <div className="flow-graph">
-      <div className="structure-file">
-        <span className="mono">auto · Mermaid TD</span>
+      <div className="flow-toolbar">
+        <div className="flow-mode" role="group" aria-label="Flow mode">
+          <button
+            type="button"
+            className={mode === 'edit' ? 'is-active' : ''}
+            aria-pressed={mode === 'edit'}
+            onClick={() => setMode('edit')}
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            className={mode === 'preview' ? 'is-active' : ''}
+            aria-pressed={mode === 'preview'}
+            onClick={() => setMode('preview')}
+          >
+            Preview
+          </button>
+        </div>
+        <span className="mono muted small flow-source-badge">
+          {custom ? 'custom · Mermaid' : 'auto · Mermaid TD'}
+        </span>
+        {custom ? (
+          <button
+            type="button"
+            className="flow-reset"
+            onClick={handleReset}
+            title="Discard edits and regenerate from cells"
+          >
+            Reset to auto
+          </button>
+        ) : null}
       </div>
 
-      <div className="flow-canvas" role="img" aria-label="Cell connection graph">
-        <svg
-          className="flow-svg"
-          viewBox={`0 0 ${layout.width} ${layout.height}`}
-          width="100%"
-          height={layout.height}
-        >
-          <defs>
-            <marker
-              id="flow-arrow"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="7"
-              markerHeight="7"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" className="flow-arrow-head" />
-            </marker>
-            <marker
-              id="flow-arrow-dep"
-              viewBox="0 0 10 10"
-              refX="9"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" className="flow-arrow-head-dep" />
-            </marker>
-          </defs>
-
-          {layout.edges.map((edge) => (
-            <g key={edge.key}>
-              <path
-                d={edge.d}
-                className={`flow-edge flow-edge-${edge.kind}`}
-                markerEnd={edge.kind === 'order' ? 'url(#flow-arrow)' : 'url(#flow-arrow-dep)'}
-                fill="none"
-              />
-              {edge.label ? (
-                <text x={edge.labelX} y={edge.labelY} className="flow-edge-label">
-                  {edge.label}
-                </text>
-              ) : null}
-            </g>
-          ))}
-
-          {layout.nodes.map((node) => {
-            const current = node.id === activeCellId
-            return (
-              <g
-                key={node.id}
-                className={`flow-node ${current ? 'is-current' : ''} status-${node.status}`}
-                transform={`translate(${node.x}, ${node.y})`}
+      {mode === 'edit' ? (
+        <textarea
+          className="flow-editor"
+          value={source}
+          onChange={(event) => handleEdit(event.target.value)}
+          spellCheck={false}
+          aria-label="Flow Mermaid source"
+          placeholder={'flowchart TD\n  n_a["1. Cell"]\n  n_a --> n_b'}
+        />
+      ) : (
+        <>
+          {parsed.ok === false && custom ? (
+            <div className="flow-parse-error" role="alert">
+              {parsed.error}
+            </div>
+          ) : null}
+          <div className="flow-canvas" role="img" aria-label="Cell connection graph">
+            {previewNodes.length === 0 ? (
+              <div className="empty-state">No nodes to preview.</div>
+            ) : (
+              <svg
+                className="flow-svg"
+                viewBox={`0 0 ${layout.width} ${layout.height}`}
+                width="100%"
+                height={layout.height}
               >
-                <title>{node.label}</title>
-                <rect
-                  width={NODE_W}
-                  height={NODE_H}
-                  rx="8"
-                  ry="8"
-                  className="flow-node-shape"
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(node.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      onSelect(node.id)
-                    }
-                  }}
-                />
-                <text
-                  x={NODE_W / 2}
-                  y={NODE_H / 2 + 1}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  className="flow-node-label"
-                  onClick={() => onSelect(node.id)}
-                >
-                  {truncate(node.label, 28)}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
-      </div>
+                <defs>
+                  <marker
+                    id="flow-arrow"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="7"
+                    markerHeight="7"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 0 L 10 5 L 0 10 z" className="flow-arrow-head" />
+                  </marker>
+                  <marker
+                    id="flow-arrow-dep"
+                    viewBox="0 0 10 10"
+                    refX="9"
+                    refY="5"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M 0 0 L 10 5 L 0 10 z" className="flow-arrow-head-dep" />
+                  </marker>
+                </defs>
 
-      <details className="flow-mermaid-source">
-        <summary>Mermaid source</summary>
-        <pre className="mono">{mermaid}</pre>
-      </details>
+                {layout.edges.map((edge) => (
+                  <g key={edge.key}>
+                    <path
+                      d={edge.d}
+                      className={`flow-edge flow-edge-${edge.kind}`}
+                      markerEnd={
+                        edge.kind === 'order' ? 'url(#flow-arrow)' : 'url(#flow-arrow-dep)'
+                      }
+                      fill="none"
+                    />
+                    {edge.label ? (
+                      <text x={edge.labelX} y={edge.labelY} className="flow-edge-label">
+                        {edge.label}
+                      </text>
+                    ) : null}
+                  </g>
+                ))}
+
+                {layout.nodes.map((node) => {
+                  const current =
+                    node.id === activeCellId ||
+                    cellIdForFlowNode(node.id, node.label, cells) === activeCellId
+                  return (
+                    <g
+                      key={node.id}
+                      className={`flow-node ${current ? 'is-current' : ''} status-${node.status}`}
+                      transform={`translate(${node.x}, ${node.y})`}
+                    >
+                      <title>{node.label}</title>
+                      <rect
+                        width={NODE_W}
+                        height={NODE_H}
+                        rx="8"
+                        ry="8"
+                        className="flow-node-shape"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => handleNodeSelect(node)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault()
+                            handleNodeSelect(node)
+                          }
+                        }}
+                      />
+                      <text
+                        x={NODE_W / 2}
+                        y={NODE_H / 2 + 1}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        className="flow-node-label"
+                        onClick={() => handleNodeSelect(node)}
+                      >
+                        {truncate(node.label, 28)}
+                      </text>
+                    </g>
+                  )
+                })}
+              </svg>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

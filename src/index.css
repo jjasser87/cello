@@ -2044,6 +2044,82 @@ html.is-desktop .workspace {
   min-height: 0;
 }
 
+.flow-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.flow-mode {
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.flow-mode button {
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.flow-mode button.is-active {
+  color: #1a1008;
+  background: linear-gradient(180deg, var(--wood-bright), var(--wood));
+  border-color: var(--wood-deep);
+}
+
+.flow-source-badge {
+  margin-left: 0.15rem;
+}
+
+.flow-reset {
+  margin-left: auto;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.flow-reset:hover {
+  border-color: var(--wood);
+  color: var(--ink);
+}
+
+.flow-editor {
+  display: block;
+  width: 100%;
+  min-height: 12rem;
+  resize: vertical;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #050505;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.45;
+  padding: 0.55rem 0.65rem;
+}
+
+.flow-editor:focus {
+  outline: none;
+  border-color: var(--wood);
+}
+
+.flow-parse-error {
+  font-size: 0.78rem;
+  color: var(--danger, #d4725a);
+  padding: 0.35rem 0.45rem;
+  border: 1px solid rgba(212, 114, 90, 0.35);
+  border-radius: 6px;
+  background: rgba(212, 114, 90, 0.08);
+}
+
 .flow-canvas {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2115,33 +2191,6 @@ html.is-desktop .workspace {
   font-family: var(--font-mono);
   font-size: 9.5px;
   pointer-events: none;
-}
-
-.flow-mermaid-source {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  padding: 0.35rem 0.55rem;
-}
-
-.flow-mermaid-source summary {
-  cursor: pointer;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  user-select: none;
-}
-
-.flow-mermaid-source pre {
-  margin: 0.45rem 0 0.2rem;
-  padding: 0.55rem 0.6rem;
-  border-radius: 6px;
-  background: var(--bg-code);
-  border: 1px solid var(--line);
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 
 .ai-thread {

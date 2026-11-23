@@ -106,7 +106,7 @@ function PanelHeader({ panel, onCollapse }: { panel: PanelId; onCollapse: () => 
     files: { title: 'Files', blurb: 'Project tree.' },
     env: { title: 'Environment', blurb: 'Bindings in the kernel.' },
     data: { title: 'Data', blurb: 'Prior tables for the selected cell.' },
-    structure: { title: 'Script flow', blurb: 'Auto graph of how cells connect.' },
+    structure: { title: 'Script flow', blurb: 'Mermaid graph of how cells connect — Edit to customize.' },
     console: { title: 'Console', blurb: 'Prior runs for the selected cell.' },
     ai: { title: 'Agent', blurb: 'Suggests — never silent rewrites.' },
   }
@@ -638,7 +638,7 @@ function DataPanel({ api }: SidePanelProps) {
 }
 
 function StructurePanel({ api }: SidePanelProps) {
-  const { state, selectCell } = api
+  const { state, selectCell, setFlowMermaid } = api
 
   // Flow stays inside the fixed helper panel and scrolls there (with fade cue),
   // rather than growing the editor frame when the graph is tall.
@@ -651,6 +651,8 @@ function StructurePanel({ api }: SidePanelProps) {
         cells={state.cells}
         language={state.language}
         activeCellId={state.activeCellId}
+        flowMermaid={state.flowMermaid}
+        onFlowMermaidChange={setFlowMermaid}
         onSelect={(cellId) => selectCell(cellId, 'structure')}
       />
     </div>
