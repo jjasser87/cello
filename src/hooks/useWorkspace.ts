@@ -54,7 +54,7 @@ import {
   scriptToCells,
   starterScript,
 } from '../lib/script'
-import { packageRunOutputs } from '../lib/runArtifacts'
+import { mergeHistoryAfterRun, packageRunOutputs } from '../lib/runArtifacts'
 import {
   applyCodeHistoryRevert,
   applyTypedHistoryRevert,
@@ -165,17 +165,28 @@ function applyRunToState(
     cellId: string
     cellName: string
     code: string
-    previousCode: string
     result: RunArtifacts
   },
 ): WorkspaceState {
-  const { cellId, cellName, code, previousCode, result } = args
-  const packaged = packageRunOutputs({ cellId, cellName, code, previousCode, result })
+  const { cellId, cellName, code, result } = args
+  const previousEntry = [...prev.history].reverse().find((entry) => entry.cellId === cellId)
+  const packaged = packageRunOutputs({
+    cellId,
+    cellName,
+    code,
+    previousEntry: previousEntry ?? null,
+    result,
+  })
 
   const plots = packaged.plot ? [...prev.plots, packaged.plot] : prev.plots
   const tables = packaged.table ? [...prev.tables, packaged.table] : prev.tables
   const consoleEntries = [...prev.consoleEntries, packaged.consoleEntry]
-  const history = [...prev.history, packaged.historyEntry]
+  const history = mergeHistoryAfterRun(
+    prev.history,
+    packaged.historyEntry,
+    packaged.historyReused,
+  )
+  const historyIndex = history.findIndex((entry) => entry.id === packaged.historyEntry.id)
   let activePanel = prev.activePanel
   let sidePanelOpen = prev.sidePanelOpen
   if (packaged.plot) {
@@ -213,7 +224,7 @@ function applyRunToState(
         : item,
     ),
     history,
-    historyIndex: history.length - 1,
+    historyIndex: historyIndex >= 0 ? historyIndex : history.length - 1,
     plots,
     activePlotId: cellPlotId,
     tables,
@@ -890,9 +901,6 @@ export function useWorkspace() {
       ),
     }))
 
-    const previousEntry = [...snapshot.history].reverse().find((entry) => entry.cellId === id)
-    const previousCode = previousEntry?.code ?? ''
-
     try {
       let result: RunArtifacts
       if (snapshot.language === 'r') {
@@ -906,7 +914,6 @@ export function useWorkspace() {
           cellId: id,
           cellName: cell.name,
           code: cell.code,
-          previousCode,
           result,
         }),
       )
@@ -924,7 +931,6 @@ export function useWorkspace() {
           cellId: id,
           cellName: cell.name,
           code: cell.code,
-          previousCode,
           result,
         }),
       )
@@ -962,6 +968,7 @@ export function useWorkspace() {
             { status: Cell['status']; error?: string; env: RunArtifacts['env'] }
           >()
           let lastConsoleId: string | null = null
+          let lastHistoryId: string | null = null
 
           results.forEach((result, index) => {
             const cell = cells[index]
@@ -973,14 +980,19 @@ export function useWorkspace() {
               cellId: cell.id,
               cellName: cell.name,
               code: cell.code,
-              previousCode: previousEntry?.code ?? '',
+              previousEntry: previousEntry ?? null,
               result,
             })
-            historyCursor = [...historyCursor, packaged.historyEntry]
+            historyCursor = mergeHistoryAfterRun(
+              historyCursor,
+              packaged.historyEntry,
+              packaged.historyReused,
+            )
             if (packaged.plot) plots.push(packaged.plot)
             if (packaged.table) tables.push(packaged.table)
             consoleEntries.push(packaged.consoleEntry)
             lastConsoleId = packaged.consoleEntry.id
+            lastHistoryId = packaged.historyEntry.id
             statusById.set(cell.id, {
               status: result.error ? 'error' : 'ok',
               error: result.error,
@@ -1014,6 +1026,10 @@ export function useWorkspace() {
             ? consoleEntries.filter((entry) => entry.cellId === lastCellId)
             : []
 
+          const lastHistoryIndex = lastHistoryId
+            ? historyCursor.findIndex((entry) => entry.id === lastHistoryId)
+            : historyCursor.length - 1
+
           return {
             ...prev,
             env: last?.env ?? [],
@@ -1024,7 +1040,8 @@ export function useWorkspace() {
             activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
             activeConsoleId: lastCellConsole[lastCellConsole.length - 1]?.id ?? lastConsoleId,
             history: historyCursor,
-            historyIndex: historyCursor.length - 1,
+            historyIndex:
+              lastHistoryIndex >= 0 ? lastHistoryIndex : historyCursor.length - 1,
             consoleLines: [
               ...prev.consoleLines,
               stopped
@@ -1064,6 +1081,7 @@ export function useWorkspace() {
           status: Cell['status']
           error?: string
           historyEntry: HistoryEntry
+          historyReused: boolean
           plot?: NonNullable<RunArtifacts['plot']>
           table?: NonNullable<RunArtifacts['table']>
           consoleEntry: ReturnType<typeof packageRunOutputs>['consoleEntry']
@@ -1084,15 +1102,20 @@ export function useWorkspace() {
             cellId: cell.id,
             cellName: cell.name,
             code: cell.code,
-            previousCode: previousEntry?.code ?? '',
+            previousEntry: previousEntry ?? null,
             result,
           })
-          historyCursor = [...historyCursor, packaged.historyEntry]
+          historyCursor = mergeHistoryAfterRun(
+            historyCursor,
+            packaged.historyEntry,
+            packaged.historyReused,
+          )
           batches.push({
             cellId: cell.id,
             status: result.error ? 'error' : 'ok',
             error: result.error,
             historyEntry: packaged.historyEntry,
+            historyReused: packaged.historyReused,
             plot: packaged.plot ?? undefined,
             table: packaged.table ?? undefined,
             consoleEntry: packaged.consoleEntry,
@@ -1106,7 +1129,14 @@ export function useWorkspace() {
         }
 
         setState((prev) => {
-          const history = [...prev.history, ...batches.map((batch) => batch.historyEntry)]
+          let history = [...prev.history]
+          for (const batch of batches) {
+            history = mergeHistoryAfterRun(
+              history,
+              batch.historyEntry,
+              batch.historyReused,
+            )
+          }
           const plots = [
             ...prev.plots,
             ...batches.flatMap((batch) => (batch.plot ? [batch.plot] : [])),
@@ -1157,6 +1187,10 @@ export function useWorkspace() {
             ? consoleEntries.filter((entry) => entry.cellId === lastCellId)
             : []
 
+          const lastHistoryIndex = last
+            ? history.findIndex((entry) => entry.id === last.historyEntry.id)
+            : history.length - 1
+
           return {
             ...prev,
             env: last?.env ?? [],
@@ -1167,7 +1201,7 @@ export function useWorkspace() {
             activeTableId: lastCellTables[lastCellTables.length - 1]?.id ?? null,
             activeConsoleId: lastCellConsole[lastCellConsole.length - 1]?.id ?? null,
             history,
-            historyIndex: history.length - 1,
+            historyIndex: lastHistoryIndex >= 0 ? lastHistoryIndex : history.length - 1,
             consoleLines,
             activePanel,
             sidePanelOpen,
