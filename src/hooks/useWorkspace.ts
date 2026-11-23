@@ -23,6 +23,7 @@ import {
 import {
   folderManifestAsV1,
   parseFolderManifest,
+  planScriptSourcePath,
   serializeFolderManifest,
   stringifyFolderManifest,
   MANIFEST_NAME,
@@ -714,8 +715,17 @@ export function useWorkspace() {
       return { ok: false, error: 'No folder project is open' }
     }
 
+    // Real kernel source on disk (e.g. analysis.R) — structure B mirror of cell code.
+    // Resolve before serializing so cello.json.scriptPath matches the file we write.
+    const scriptRel = planScriptSourcePath(snapshot)
+    const scriptContents = cellsToScript(snapshot.cells, snapshot.language)
+    const saveSnapshot = {
+      ...snapshot,
+      scriptPath: scriptRel,
+    }
+
     // Lean manifest: cells (code/name/explain/comments), language, meta, selection.
-    const manifest = serializeFolderManifest(snapshot)
+    const manifest = serializeFolderManifest(saveSnapshot)
     if (manifest.cells.length === 0 || manifest.cells.every((cell) => !cell.code.trim())) {
       // Still allow empty Untitled cells, but never write a stub that drops live cells.
       if (snapshot.cells.length === 0) {
@@ -726,6 +736,10 @@ export function useWorkspace() {
     const written = await writeProjectText(target, stringifyFolderManifest(manifest))
     if (!written.ok) return written
 
+    const scriptAbs = joinProjectPath(snapshot.projectRoot, scriptRel)
+    const scriptWritten = await writeProjectText(scriptAbs, scriptContents)
+    if (!scriptWritten.ok) return scriptWritten
+
     // Sidecar: history + ui always; runs/artifacts when Save outputs is on.
     const plan = planSidecarWrites(snapshot)
     for (const file of plan.files) {
@@ -735,6 +749,7 @@ export function useWorkspace() {
     }
 
     const sideBits = [
+      scriptRel,
       `${SIDECAR_DIR}/${HISTORY_FILE}`,
       `${SIDECAR_DIR}/${UI_FILE}`,
       snapshot.saveOutputs ? `${SIDECAR_DIR}/${RUNS_DIR}/${ARTIFACTS_FILE}` : null,
@@ -742,6 +757,9 @@ export function useWorkspace() {
     setState((prev) => ({
       ...prev,
       meta: { ...prev.meta, updatedAt: Date.now() },
+      // Keep Active script aligned with the file we just flushed when we fell back
+      // from a non-source selection (e.g. csv) to the language default.
+      scriptPath: scriptRel,
       consoleLines: [
         ...prev.consoleLines,
         `Saved ${MANIFEST_NAME} (${manifest.cells.length} cells) + ${sideBits.join(', ')}.`,

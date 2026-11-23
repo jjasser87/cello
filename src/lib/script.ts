@@ -1,5 +1,5 @@
-import type { Cell, KernelLanguage } from '../types'
-import { emptyExplanationTemplate } from './explanation'
+import type { Cell, KernelLanguage } from '../types.ts'
+import { emptyExplanationTemplate } from './explanation.ts'
 
 /** Accept both `// %%` (valid JS) and `# %%` (R / Python-style) markers. */
 const CELL_RE = /^(?:\/\/|#)\s*%%\s*(.*)$/
@@ -12,7 +12,10 @@ export function cellMarker(language: KernelLanguage, name = ''): string {
   return label ? `// %% ${label}` : '// %%'
 }
 
-export function cellsToScript(cells: Cell[], language: KernelLanguage = 'javascript'): string {
+export function cellsToScript(
+  cells: { name: string; code: string }[],
+  language: KernelLanguage = 'javascript',
+): string {
   return cells
     .map((cell) => {
       const header = cellMarker(language, cell.name)
