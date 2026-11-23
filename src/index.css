@@ -182,13 +182,22 @@ html.is-desktop .workspace {
 }
 
 /*
- * Pin the cell+helper cluster; spare window area (maximize / manual resize)
- * stays empty rather than stretching or restacking chrome.
+ * Pin the cell+helper cluster at every viewport size. Spare window area
+ * (maximize / manual resize / narrow browser) stays empty or page-scrolls —
+ * never restack, stretch, or compress dock/menu chrome.
  */
+.workspace-cluster,
+.cell-editor,
+.workspace-lane,
+.main-window {
+  width: max-content;
+  max-width: none;
+  flex-shrink: 0;
+}
+
 html.is-desktop .app-shell,
-html.is-desktop .workspace,
-html.is-desktop .workspace-cluster,
-html.is-desktop .cell-editor {
+html.is-desktop .workspace {
+  /* Hug shell: cluster owns size; empty space grows outside. */
   width: max-content;
   max-width: none;
 }
@@ -382,7 +391,7 @@ html.is-desktop .cell-editor {
   min-height: 0;
   padding-top: 0;
   width: max-content;
-  max-width: 100%;
+  max-width: none;
   /* Mono metrics: --cell-frame-width resolves 80ch against the writing surface. */
   font-family: var(--font-mono);
   font-size: 0.92rem;
@@ -397,8 +406,8 @@ html.is-desktop .cell-editor {
   flex-wrap: nowrap;
   box-sizing: border-box;
   width: var(--cell-frame-width);
-  max-width: 100%;
-  min-width: 0;
+  min-width: var(--cell-frame-width);
+  max-width: none;
   min-height: 0;
   margin: 0;
   padding: 0.05rem 0;
@@ -487,7 +496,7 @@ html.is-desktop .cell-editor {
   display: block;
   width: max-content;
   max-width: none;
-  min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
+  min-height: max(220px, var(--ribbon-track-min));
   /* Default (right dock): left corners only — right edge meets the ribbon flush. */
   border-radius: var(--radius) 0 0 var(--radius);
   border: var(--cell-border) solid var(--line);
@@ -546,12 +555,10 @@ html.is-desktop .cell-editor {
   width: 80ch;
   max-width: none;
   /*
-   * Height tracks content (CellEditor sets inline height). No inner scroll —
-   * the workspace page scrolls with wheel/touch instead.
-   * When Flow is open, --flow-frame-min grows the frame so the graph fits
-   * without a nested panel scrollbar.
+   * Height tracks content (CellEditor sets inline height). No inner scroll in
+   * the editor — helpers scroll inside their fixed panel instead.
    */
-  min-height: max(220px, var(--ribbon-track-min), var(--flow-frame-min, 0px));
+  min-height: max(220px, var(--ribbon-track-min));
   resize: none;
   background: transparent;
   /* Ink lives on the highlight layer; caret stays visible. */
@@ -681,7 +688,8 @@ html.is-desktop .cell-editor {
   margin: 0;
   box-sizing: border-box;
   width: var(--cell-frame-width);
-  max-width: 100%;
+  min-width: var(--cell-frame-width);
+  max-width: none;
   min-height: 1.6rem;
   color: var(--muted);
   font-family: var(--font-ui);
@@ -764,7 +772,8 @@ html.is-desktop .cell-editor {
 .cell-editor > .cell-error {
   box-sizing: border-box;
   width: var(--cell-frame-width);
-  max-width: 100%;
+  min-width: var(--cell-frame-width);
+  max-width: none;
 }
 
 .side-shell {
@@ -848,7 +857,7 @@ html.is-desktop .cell-editor {
 
 .workspace[data-dock='top'] .code-surface,
 .workspace[data-dock='bottom'] .code-surface {
-  min-height: max(220px, var(--flow-frame-min, 0px));
+  min-height: 220px;
   border-left-color: var(--line);
   border-right-color: var(--line);
 }
@@ -1085,16 +1094,27 @@ html.is-desktop .cell-editor {
   padding: 0.35rem 0.65rem;
 }
 
+/*
+ * Scroll host for helper panels: body scrolls inside a fixed panel size;
+ * fade cue appears when more output sits below the fold.
+ */
+.side-panel-scroll {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .side-panel-body {
-  /*
-   * Fixed panel size; wheel/touch still scroll when content overflows,
-   * but no nested scrollbar chrome (matches page-scroll design).
-   */
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  /* Keep chrome clean; fade cue signals overflow instead of a scrollbar. */
   scrollbar-width: none;
   padding: 0.9rem 1rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .side-panel-body::-webkit-scrollbar {
@@ -1102,9 +1122,31 @@ html.is-desktop .cell-editor {
   height: 0;
 }
 
-/* Flow: grow the cell frame so the graph fits; page scrolls instead of clipping. */
+/* Flow and every other helper share the same fixed-size inner scroll. */
 .side-panel-body.is-flow {
-  overflow: hidden;
+  overflow: auto;
+}
+
+.side-panel-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2.75rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms ease;
+  background: linear-gradient(
+    to top,
+    var(--bg-panel) 8%,
+    rgba(22, 22, 22, 0.72) 42%,
+    transparent 100%
+  );
+  z-index: 2;
+}
+
+.side-panel-scroll[data-more-below='true'] .side-panel-fade {
+  opacity: 1;
 }
 
 .console-panel {
@@ -2054,28 +2096,16 @@ html.is-desktop .cell-editor {
 }
 
 /*
- * Narrow viewports: soften chrome only. Do NOT restack helpers under the
- * editor or stretch header/nav to full width — dock side and menu placement
- * are settings, and must stay fixed when the window resizes.
+ * No viewport breakpoints for workspace chrome. Dock side, menus, and helper
+ * geometry stay identical at every window size; the page may scroll if the
+ * cluster is wider than the viewport. Desktop hug mode keeps overflow hidden.
  */
-@media (max-width: 860px) {
-  .workspace {
-    padding: 0.65rem 0.75rem 0.85rem;
-    /* Cluster may be wider than the viewport; page scrolls instead of reflow. */
-    overflow: auto;
-  }
+.workspace {
+  overflow: auto;
+}
 
-  .cell-nav-hint {
-    display: none;
-  }
-
-  .diff-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .palette {
-    width: min(92vw, 28rem);
-  }
+html.is-desktop .workspace {
+  overflow: hidden;
 }
 
 /* —— Command palette (⌘/Ctrl+Shift+P) —— */
@@ -2091,7 +2121,7 @@ html.is-desktop .cell-editor {
 }
 
 .palette {
-  width: min(28rem, 100%);
+  width: min(28rem, calc(100vw - 2rem));
   max-height: min(70vh, 32rem);
   display: flex;
   flex-direction: column;
