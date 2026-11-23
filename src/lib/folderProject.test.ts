@@ -6,7 +6,9 @@ import {
   PROJECT_VERSION_FOLDER,
   createFolderManifest,
   isKernelSourcePath,
+  normalizeFolderScriptPath,
   parseFolderManifest,
+  planFolderSaveWrites,
   planScriptSourcePath,
   resolveScriptMirrorPath,
   serializeFolderManifest,
@@ -83,9 +85,59 @@ describe('folder project (structure B)', () => {
     assert.equal(resolveScriptMirrorPath('src/load.r', 'r'), 'src/load.r')
     assert.equal(resolveScriptMirrorPath('data/sales.csv', 'r'), 'analysis.R')
     assert.equal(resolveScriptMirrorPath(MANIFEST_NAME, 'r'), 'analysis.R')
+    assert.equal(resolveScriptMirrorPath('Cello.json', 'r'), 'analysis.R')
     assert.equal(resolveScriptMirrorPath('.cello/ui.json', 'r'), 'analysis.R')
     assert.equal(isKernelSourcePath('analysis.R', 'r'), true)
     assert.equal(isKernelSourcePath('notes.txt', 'r'), false)
+  })
+
+  it('plans Save writes for an existing folder with scriptPath cello.json and no analysis.R', () => {
+    // Mirrors real test folders opened before the R-mirror fix: lean cello.json only,
+    // Active script accidentally set to the manifest, no analysis.R on disk yet.
+    const existing = {
+      cells: [
+        {
+          id: 'cell_load',
+          name: 'Load Libraries',
+          code: 'library(ggplot2)',
+          explanation: '',
+          comments: [],
+        },
+        {
+          id: 'cell_data',
+          name: 'Create random data',
+          code: 'salaries <- rnorm(10)',
+          explanation: '',
+          comments: [],
+        },
+      ],
+      activeCellId: 'cell_load',
+      activePanel: 'files' as const,
+      language: 'r' as const,
+      scriptPath: 'cello.json',
+      meta: { name: 'cello test', createdAt: 1, updatedAt: 1 },
+    }
+
+    assert.equal(normalizeFolderScriptPath(existing.scriptPath, 'r'), 'analysis.R')
+
+    const planned = planFolderSaveWrites(existing)
+    assert.equal(planned.scriptPath, 'analysis.R')
+    const paths = planned.files.map((file) => file.relativePath)
+    assert.ok(paths.includes(MANIFEST_NAME))
+    assert.ok(paths.includes('analysis.R'))
+
+    const script = planned.files.find((file) => file.relativePath === 'analysis.R')
+    assert.ok(script)
+    assert.match(script.contents, /library\(ggplot2\)/)
+    assert.match(script.contents, /salaries <- rnorm\(10\)/)
+
+    const manifestFile = planned.files.find((file) => file.relativePath === MANIFEST_NAME)
+    assert.ok(manifestFile)
+    const parsed = parseFolderManifest(manifestFile.contents)
+    assert.equal(parsed.ok, true)
+    if (!parsed.ok) return
+    assert.equal(parsed.project.scriptPath, 'analysis.R')
+    assert.equal(parsed.project.cells[0].code, 'library(ggplot2)')
   })
 
   it('migrates v1 .cello documents into v2 folder shape', () => {

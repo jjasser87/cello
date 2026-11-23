@@ -22,10 +22,9 @@ import {
 } from '../lib/projectFile'
 import {
   folderManifestAsV1,
+  normalizeFolderScriptPath,
   parseFolderManifest,
-  planScriptSourcePath,
-  serializeFolderManifest,
-  stringifyFolderManifest,
+  planFolderSaveWrites,
   MANIFEST_NAME,
   SIDECAR_DIR,
 } from '../lib/folderProject'
@@ -642,7 +641,16 @@ export function useWorkspace() {
           },
         ]
 
-    const asV1 = folderManifestAsV1(parsed.project)
+    // Existing folders may have scriptPath pointing at cello.json (File panel click).
+    // Normalize so Active script / Save target the language source without a new folder.
+    const normalizedScriptPath = normalizeFolderScriptPath(
+      parsed.project.scriptPath,
+      parsed.project.language,
+    )
+    const asV1 = folderManifestAsV1({
+      ...parsed.project,
+      scriptPath: normalizedScriptPath,
+    })
     sharedRef.current = createSharedBag()
     await setKernelProjectCwd(picked.root)
 
@@ -678,6 +686,7 @@ export function useWorkspace() {
         files: diskFiles,
         projectRoot: picked.root,
         filesSource: 'disk',
+        scriptPath: normalizedScriptPath,
         saveOutputs: sidecar.ui.saveOutputs ?? false,
         hideSidecar: sidecar.ui.hideSidecar ?? true,
         helperDock: sidecar.ui.helperDock ?? next.helperDock,
@@ -715,54 +724,38 @@ export function useWorkspace() {
       return { ok: false, error: 'No folder project is open' }
     }
 
-    // Real kernel source on disk (e.g. analysis.R) — structure B mirror of cell code.
-    // Resolve before serializing so cello.json.scriptPath matches the file we write.
-    const scriptRel = planScriptSourcePath(snapshot)
-    const scriptContents = cellsToScript(snapshot.cells, snapshot.language)
-    const saveSnapshot = {
-      ...snapshot,
-      scriptPath: scriptRel,
+    if (snapshot.cells.length === 0) {
+      return { ok: false, error: 'Nothing to save — project has no cells' }
     }
 
-    // Lean manifest: cells (code/name/explain/comments), language, meta, selection.
-    const manifest = serializeFolderManifest(saveSnapshot)
-    if (manifest.cells.length === 0 || manifest.cells.every((cell) => !cell.code.trim())) {
-      // Still allow empty Untitled cells, but never write a stub that drops live cells.
-      if (snapshot.cells.length === 0) {
-        return { ok: false, error: 'Nothing to save — project has no cells' }
+    // Lean manifest + kernel source mirror (analysis.R even when scriptPath was
+    // cello.json / missing). Existing folders do not need to be re-created.
+    const planned = planFolderSaveWrites(snapshot)
+    const sidecar = planSidecarWrites(snapshot)
+    const files = [...planned.files, ...sidecar.files]
+
+    for (const file of files) {
+      const abs = joinProjectPath(snapshot.projectRoot, file.relativePath)
+      const written = await writeProjectText(abs, file.contents)
+      if (!written.ok) {
+        return {
+          ok: false,
+          error: `Could not write ${file.relativePath}: ${written.error}`,
+        }
       }
     }
-    const target = joinProjectPath(snapshot.projectRoot, MANIFEST_NAME)
-    const written = await writeProjectText(target, stringifyFolderManifest(manifest))
-    if (!written.ok) return written
 
-    const scriptAbs = joinProjectPath(snapshot.projectRoot, scriptRel)
-    const scriptWritten = await writeProjectText(scriptAbs, scriptContents)
-    if (!scriptWritten.ok) return scriptWritten
-
-    // Sidecar: history + ui always; runs/artifacts when Save outputs is on.
-    const plan = planSidecarWrites(snapshot)
-    for (const file of plan.files) {
-      const abs = joinProjectPath(snapshot.projectRoot, file.relativePath)
-      const side = await writeProjectText(abs, file.contents)
-      if (!side.ok) return side
-    }
-
-    const sideBits = [
-      scriptRel,
-      `${SIDECAR_DIR}/${HISTORY_FILE}`,
-      `${SIDECAR_DIR}/${UI_FILE}`,
-      snapshot.saveOutputs ? `${SIDECAR_DIR}/${RUNS_DIR}/${ARTIFACTS_FILE}` : null,
-    ].filter(Boolean)
+    const sideBits = files
+      .map((file) => file.relativePath)
+      .filter((rel) => rel !== MANIFEST_NAME)
     setState((prev) => ({
       ...prev,
       meta: { ...prev.meta, updatedAt: Date.now() },
-      // Keep Active script aligned with the file we just flushed when we fell back
-      // from a non-source selection (e.g. csv) to the language default.
-      scriptPath: scriptRel,
+      // Keep Active script aligned with the kernel source we flushed (not cello.json).
+      scriptPath: planned.scriptPath,
       consoleLines: [
         ...prev.consoleLines,
-        `Saved ${MANIFEST_NAME} (${manifest.cells.length} cells) + ${sideBits.join(', ')}.`,
+        `Saved ${MANIFEST_NAME} (${snapshot.cells.length} cells) + ${sideBits.join(', ')}.`,
       ].slice(-200),
     }))
     await refreshDiskFiles()
