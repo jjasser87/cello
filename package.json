@@ -29,6 +29,8 @@
     "test:r-source-normalize": "node --experimental-strip-types --test server/normalizeRSource.test.ts",
     "test:flow-graph": "node --experimental-strip-types --test src/lib/flowGraph.test.ts",
     "test:flow-mermaid": "node --experimental-strip-types --test src/lib/flowMermaid.test.ts",
+    "test:mermaid-runtime": "node --experimental-strip-types --test src/lib/mermaidRuntime.test.ts",
+    "test:csp-policy": "node --experimental-strip-types --test src/lib/cspPolicy.test.ts",
     "test:explanation": "node --experimental-strip-types --test src/lib/explanation.test.ts",
     "test:project-file": "node --experimental-strip-types --test src/lib/projectFile.test.ts",
     "test:r-completions": "node --experimental-strip-types --test src/lib/rCompletions.test.ts",
@@ -46,9 +48,10 @@
     "test:folder-save-writes": "node --experimental-strip-types --test src/lib/folderSaveWrites.test.ts",
     "test:folder-sidecar": "node --experimental-strip-types --test src/lib/folderSidecar.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:editor-scroll-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:mermaid-runtime && npm run test:csp-policy && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:editor-scroll-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
   },
   "dependencies": {
+    "mermaid": "^11.17.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
@@ -60,6 +63,7 @@
     "electron": "^39.2.3",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.28.2",
+    "happy-dom": "^21.0.4",
     "oxlint": "^1.90.0",
     "tsx": "^4.20.6",
     "typescript": "~7.0.2",
