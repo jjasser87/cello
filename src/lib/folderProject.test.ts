@@ -43,13 +43,17 @@ describe('folder project (structure B)', () => {
     }, 99)
 
     const text = stringifyFolderManifest(doc)
-    assert.equal(text.includes(MANIFEST_NAME) || text.includes('"version": 2'), true)
+    assert.equal(text.includes('"version": 2'), true)
+    assert.match(text, /"code": "x <- 1"/)
+    assert.match(text, /"name": "Load"/)
+    assert.match(text, /"explanation"/)
 
     const parsed = parseFolderManifest(text)
     assert.equal(parsed.ok, true)
     if (!parsed.ok) return
     assert.equal(parsed.project.version, PROJECT_VERSION_FOLDER)
     assert.equal(parsed.project.cells[0].code, 'x <- 1')
+    assert.equal(parsed.project.cells[0].name, 'Load')
     assert.equal(parsed.project.artifactsDir, ARTIFACTS_DIR)
   })
 

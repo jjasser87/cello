@@ -108,7 +108,7 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
     {
       id: 'save-project',
       label: 'Save project…',
-      hint: 'cello.json / .cello',
+      hint: '⌘/Ctrl+S',
       group: 'Project',
     },
     {

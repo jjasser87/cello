@@ -151,6 +151,7 @@ export function stringifyFolderManifest(project: CelloProjectV2): string {
 /**
  * Parse `cello.json` (v2) or a legacy `.cello` / v1 document into a v2 folder manifest.
  * Virtual `files` from v1 are dropped — disk listing replaces them.
+ * Cell `code` / names / explanations / comments are required durable authoring state.
  */
 export function parseFolderManifest(
   input: string | unknown,
@@ -169,13 +170,33 @@ export function parseFolderManifest(
   const record = data as Record<string, unknown>
 
   // Prefer dedicated v2 path when version is 2.
+  // Coerce to v1 for the shared cell/meta parser; never invent a fake files tree
+  // into the returned v2 (File panel lists disk).
   if (record.format === PROJECT_FORMAT && record.version === PROJECT_VERSION_FOLDER) {
     const parsed = parseProject({
       ...record,
       version: 1,
-      files: Array.isArray(record.files) ? record.files : [],
+      // Empty files → parseProject would invent a demo tree; pass a minimal root
+      // so cells/code round-trip without polluting the folder project.
+      files: [
+        {
+          id: 'folder_root',
+          name:
+            typeof record.meta === 'object' &&
+            record.meta !== null &&
+            'name' in record.meta &&
+            typeof (record.meta as { name: unknown }).name === 'string'
+              ? (record.meta as { name: string }).name
+              : 'project',
+          kind: 'folder',
+          children: [],
+        },
+      ],
     })
     if (!parsed.ok) return parsed
+    if (parsed.project.cells.some((cell) => typeof cell.code !== 'string')) {
+      return { ok: false, error: 'Folder project cells must include code strings' }
+    }
     return { ok: true, project: v1ToV2(parsed.project, record) }
   }
 

@@ -83,7 +83,9 @@ export function FilesPanel({ api }: FilesPanelProps) {
               checked={state.saveOutputs}
               onChange={(event) => api.setSaveOutputs(event.target.checked)}
             />
-            <span className="muted small">Save outputs</span>
+            <span className="muted small" title="When on, Save also writes plots/console/data under .cello/runs/">
+              Save outputs
+            </span>
           </label>
           <button
             type="button"
