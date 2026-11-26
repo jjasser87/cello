@@ -34,6 +34,7 @@
     "test:explanation": "node --experimental-strip-types --test src/lib/explanation.test.ts",
     "test:project-file": "node --experimental-strip-types --test src/lib/projectFile.test.ts",
     "test:r-completions": "node --experimental-strip-types --test src/lib/rCompletions.test.ts",
+    "test:r-lint": "node --experimental-strip-types --test src/lib/rLint.test.ts",
     "test:highlight": "node --experimental-strip-types --test src/lib/highlight.test.ts",
     "test:panel-restore": "node --experimental-strip-types --test src/lib/panelRestore.test.ts",
     "test:desktop": "node --experimental-strip-types --test src/lib/desktop.test.ts",
@@ -48,7 +49,7 @@
     "test:folder-save-writes": "node --experimental-strip-types --test src/lib/folderSaveWrites.test.ts",
     "test:folder-sidecar": "node --experimental-strip-types --test src/lib/folderSidecar.test.ts",
     "test:server": "node --experimental-strip-types --test server/*.test.ts",
-    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:mermaid-runtime && npm run test:csp-policy && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:editor-scroll-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
+    "test": "npm run test:server && npm run test:flow-graph && npm run test:flow-mermaid && npm run test:mermaid-runtime && npm run test:csp-policy && npm run test:explanation && npm run test:project-file && npm run test:r-completions && npm run test:r-lint && npm run test:highlight && npm run test:panel-restore && npm run test:desktop && npm run test:settings && npm run test:overflow && npm run test:data-table-layout && npm run test:editor-scroll-layout && npm run test:env-preview && npm run test:format-timestamp && npm run test:run-artifacts && npm run test:folder-project && npm run test:folder-save-writes && npm run test:folder-sidecar"
   },
   "dependencies": {
     "mermaid": "^11.17.2",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useOverflowFade } from '../hooks/useOverflowFade'
 import { highlightHtml } from '../lib/highlight'
 import {
@@ -7,6 +7,7 @@ import {
   tokenBeforeCursor,
   type CompletionItem,
 } from '../lib/rCompletions'
+import { lintR, type RDiagnostic } from '../lib/rLint'
 import type { Cell, EnvBinding, KernelLanguage } from '../types'
 
 interface CellEditorProps {
@@ -61,6 +62,7 @@ export function CellEditor({
 }: CellEditorProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
   const highlightRef = useRef<HTMLPreElement>(null)
+  const lintGutterRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestGen = useRef(0)
@@ -74,6 +76,7 @@ export function CellEditor({
     // Reset dual-layer scroll so a tall previous cell does not leave the highlight offset.
     const el = ref.current
     const hi = highlightRef.current
+    const gutter = lintGutterRef.current
     if (el) {
       el.scrollTop = 0
       el.scrollLeft = 0
@@ -82,15 +85,18 @@ export function CellEditor({
       hi.scrollTop = 0
       hi.scrollLeft = 0
     }
+    if (gutter) gutter.scrollTop = 0
   }, [cell.id])
 
-  /** Keep the highlight layer lined up when the textarea scrolls (vertical or horizontal). */
+  /** Keep the highlight / lint gutter lined up when the textarea scrolls. */
   const syncHighlightScroll = () => {
     const el = ref.current
     const hi = highlightRef.current
     if (!el || !hi) return
     hi.scrollTop = el.scrollTop
     hi.scrollLeft = el.scrollLeft
+    const gutter = lintGutterRef.current
+    if (gutter) gutter.scrollTop = el.scrollTop
   }
 
   useEffect(() => {
@@ -274,8 +280,30 @@ export function CellEditor({
     }, COMPLETE_DEBOUNCE_MS)
   }
 
+  // Client-side R lint (parens / brackets / indent) — never blocks Run.
+  const diagnostics = useMemo(
+    () => (language === 'r' ? lintR(cell.code) : []),
+    [language, cell.code],
+  )
+
   // Dual-layer highlight: colored <pre> under a transparent textarea (same metrics).
-  const highlighted = highlightHtml(cell.code, language)
+  const highlighted = highlightHtml(
+    cell.code,
+    language,
+    language === 'r' ? diagnostics : undefined,
+  )
+
+  const lintMarkers = useMemo(
+    () => buildLintMarkers(diagnostics, cell.code),
+    [diagnostics, cell.code],
+  )
+
+  // When lint markers mount/update, align gutter scroll with the live textarea.
+  useEffect(() => {
+    const el = ref.current
+    const gutter = lintGutterRef.current
+    if (el && gutter) gutter.scrollTop = el.scrollTop
+  }, [lintMarkers.length, cell.code])
 
   return (
     <section className="cell-editor" aria-label={`Editing ${cell.name}`}>
@@ -301,7 +329,26 @@ export function CellEditor({
             className="code-surface"
             data-more-below={moreBelow ? 'true' : 'false'}
             data-more-right={moreRight ? 'true' : 'false'}
+            data-has-lint={diagnostics.length > 0 ? 'true' : 'false'}
           >
+            {/* Gutter dots in the left padding — do not change the 80ch writing width. */}
+            {lintMarkers.length > 0 ? (
+              <div ref={lintGutterRef} className="code-lint-gutter" aria-hidden="true">
+                <div
+                  className="code-lint-gutter-inner"
+                  style={{ height: lintMarkersContentHeight(cell.code) }}
+                >
+                  {lintMarkers.map((marker) => (
+                    <span
+                      key={`${marker.line}-${marker.severity}`}
+                      className={`code-lint-marker code-lint-marker-${marker.severity}`}
+                      style={{ top: marker.topPx }}
+                      title={marker.title}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <pre
               ref={highlightRef}
               className="code-highlight"
@@ -458,6 +505,32 @@ export function CellEditor({
         {sidePanel}
       </div>
 
+      {diagnostics.length > 0 ? (
+        <div className="cell-lint" role="status" aria-live="polite">
+          <span className="cell-lint-summary">
+            {formatLintSummary(diagnostics)}
+          </span>
+          <ul className="cell-lint-list">
+            {diagnostics.slice(0, 4).map((d) => (
+              <li
+                key={`${d.kind}-${d.from}-${d.message}`}
+                className={`cell-lint-item cell-lint-${d.severity}`}
+              >
+                <span className="cell-lint-loc">
+                  L{d.line}:{d.col}
+                </span>
+                <span className="cell-lint-msg">{d.message}</span>
+              </li>
+            ))}
+            {diagnostics.length > 4 ? (
+              <li className="cell-lint-item cell-lint-more">
+                +{diagnostics.length - 4} more
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+
       {cell.error ? <div className="cell-error">Error: {cell.error}</div> : null}
 
       <nav className="cell-nav" aria-label="Cell navigation">
@@ -520,4 +593,47 @@ function StatusPill({ status }: { status: Cell['status'] }) {
           ? 'Error'
           : 'Idle'
   return <span className={`status-pill status-${status}`}>{label}</span>
+}
+
+function formatLintSummary(diagnostics: RDiagnostic[]): string {
+  const errors = diagnostics.filter((d) => d.severity === 'error').length
+  const warnings = diagnostics.length - errors
+  const parts: string[] = []
+  if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`)
+  if (warnings > 0) parts.push(`${warnings} warning${warnings === 1 ? '' : 's'}`)
+  return parts.join(' · ')
+}
+
+interface LintMarker {
+  line: number
+  severity: 'error' | 'warning'
+  topPx: number
+  title: string
+}
+
+const LINT_LINE_HEIGHT_PX = 22
+const LINT_PAD_TOP_PX = 16
+
+/** One gutter marker per line — error wins over warning. Syncs with editor metrics. */
+function buildLintMarkers(diagnostics: RDiagnostic[], _code: string): LintMarker[] {
+  if (diagnostics.length === 0) return []
+  const byLine = new Map<number, RDiagnostic>()
+  for (const d of diagnostics) {
+    const prev = byLine.get(d.line)
+    if (!prev || (prev.severity !== 'error' && d.severity === 'error')) {
+      byLine.set(d.line, d)
+    }
+  }
+  return [...byLine.entries()].map(([line, d]) => ({
+    line,
+    severity: d.severity,
+    // Center the dot on the line box (scroll synced via gutter ref).
+    topPx: LINT_PAD_TOP_PX + (line - 1) * LINT_LINE_HEIGHT_PX + LINT_LINE_HEIGHT_PX / 2,
+    title: `L${d.line}: ${d.message}`,
+  }))
+}
+
+function lintMarkersContentHeight(code: string): number {
+  const lines = code.length === 0 ? 1 : code.split('\n').length
+  return LINT_PAD_TOP_PX + lines * LINT_LINE_HEIGHT_PX + LINT_PAD_TOP_PX
 }
