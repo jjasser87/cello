@@ -171,4 +171,11 @@ describe('diagnosticAt', () => {
     assert.equal(hit?.message, "Unexpected ')'")
     assert.equal(diagnosticAt(diags, 0), null)
   })
+
+  it('hits one-character marks just after the glyph (hover comfort)', () => {
+    const diags = lintR('mean(1')
+    const open = diags.find((d) => d.kind === 'unmatched-open')
+    assert.ok(open)
+    assert.equal(diagnosticAt(diags, open!.to)?.kind, 'unmatched-open')
+  })
 })

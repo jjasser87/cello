@@ -391,20 +391,34 @@ function isCodeDelimiter(code: string, index: number): boolean {
   return hit
 }
 
-/** Diagnostic covering offset (prefer error; then shortest range). */
+/**
+ * Diagnostic under a pointer/caret offset (prefer error; then shortest range).
+ * Hit-testing is inclusive of `to` so one-character marks (e.g. `{`) are easy
+ * to hover when the mouse sits just after the glyph.
+ */
 export function diagnosticAt(
   diagnostics: readonly RDiagnostic[],
   offset: number,
 ): RDiagnostic | null {
   let best: RDiagnostic | null = null
+  let bestDist = Infinity
   for (const d of diagnostics) {
-    if (offset < d.from || offset >= d.to) continue
+    // Inclusive end + 1-char slack so wavy underlines stay hoverable.
+    let dist = 0
+    if (offset < d.from) dist = d.from - offset
+    else if (offset > d.to) dist = offset - d.to
+    else dist = 0
+    if (dist > 1) continue
+    const shorter =
+      best != null && best.severity === d.severity && d.to - d.from < best.to - d.from
+    const betterSeverity = best != null && best.severity !== 'error' && d.severity === 'error'
     if (
       !best ||
-      (best.severity !== 'error' && d.severity === 'error') ||
-      (best.severity === d.severity && d.to - d.from < best.to - d.from)
+      betterSeverity ||
+      (best.severity === d.severity && (dist < bestDist || (dist === bestDist && shorter)))
     ) {
       best = d
+      bestDist = dist
     }
   }
   return best
