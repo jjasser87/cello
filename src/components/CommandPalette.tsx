@@ -120,7 +120,7 @@ function buildCommands(language: 'r' | 'javascript'): CommandItem[] {
     {
       id: 'settings',
       label: 'Settings…',
-      hint: 'R path · helper dock',
+      hint: 'R path · helper dock · lint',
       group: 'Settings',
     },
   ]
@@ -133,10 +133,12 @@ interface CommandPaletteProps {
   kernelAvailable: boolean
   kernelMessage: string | null
   helperDock: HelperDock
+  rLintEnabled: boolean
   onClose: () => void
   onRun: (id: CommandId) => void
   onSetRscriptPath: (path: string | null) => void | Promise<void>
   onSetHelperDock: (dock: HelperDock) => void
+  onSetRLintEnabled: (enabled: boolean) => void
 }
 
 export function CommandPalette({
@@ -146,10 +148,12 @@ export function CommandPalette({
   kernelAvailable,
   kernelMessage,
   helperDock,
+  rLintEnabled,
   onClose,
   onRun,
   onSetRscriptPath,
   onSetHelperDock,
+  onSetRLintEnabled,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
@@ -302,11 +306,13 @@ export function CommandPalette({
             kernelAvailable={kernelAvailable}
             kernelMessage={kernelMessage}
             helperDock={helperDock}
+            rLintEnabled={rLintEnabled}
             onBack={() => setView('commands')}
             onClose={onClose}
             onToggleLanguage={() => onRun('toggle-language')}
             onSetRscriptPath={onSetRscriptPath}
             onSetHelperDock={onSetHelperDock}
+            onSetRLintEnabled={onSetRLintEnabled}
           />
         )}
       </div>
@@ -321,11 +327,13 @@ function SettingsPanel({
   kernelAvailable,
   kernelMessage,
   helperDock,
+  rLintEnabled,
   onBack,
   onClose,
   onToggleLanguage,
   onSetRscriptPath,
   onSetHelperDock,
+  onSetRLintEnabled,
 }: {
   language: 'r' | 'javascript'
   rscriptPath: string | null
@@ -333,11 +341,13 @@ function SettingsPanel({
   kernelAvailable: boolean
   kernelMessage: string | null
   helperDock: HelperDock
+  rLintEnabled: boolean
   onBack: () => void
   onClose: () => void
   onToggleLanguage: () => void
   onSetRscriptPath: (path: string | null) => void | Promise<void>
   onSetHelperDock: (dock: HelperDock) => void
+  onSetRLintEnabled: (enabled: boolean) => void
 }) {
   const [draft, setDraft] = useState(rscriptPath ?? '')
   const [busy, setBusy] = useState(false)
@@ -398,6 +408,28 @@ function SettingsPanel({
         <p className="palette-settings-note muted small">
           Ribbon panels (Plot, Console, Data, …) sit on this side of the editor. Default is
           right. Above/below docks keep the matching cell menu on the right.
+        </p>
+
+        <label className="palette-pref">
+          <span className="palette-pref-label" id="settings-r-lint-label">
+            R structural lint
+          </span>
+          <button
+            type="button"
+            className="palette-pref-action"
+            role="switch"
+            aria-checked={rLintEnabled}
+            aria-labelledby="settings-r-lint-label"
+            onClick={() => onSetRLintEnabled(!rLintEnabled)}
+          >
+            {rLintEnabled ? 'On' : 'Off'} · toggle
+          </button>
+        </label>
+        <p className="palette-settings-note muted small">
+          Optional wavy underlines for unmatched delimiters and indentation. Off by default.
+          When on, diagnostics wait for a short idle pause so mid-edit code is not punished;
+          hover a highlight to read the problem. Matching parentheses still highlight at the
+          caret.
         </p>
 
         <div className="palette-pref-stack">

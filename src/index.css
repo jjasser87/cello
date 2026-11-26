@@ -699,6 +699,39 @@ html.is-desktop .workspace {
   text-underline-offset: 2px;
 }
 
+/* RStudio-style matching delimiter at the caret (always on for R). */
+.tok-match-paren {
+  background: color-mix(in srgb, var(--wood-bright) 28%, transparent);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--wood) 45%, transparent);
+}
+
+/* Floating lint message when hovering a highlight through the textarea. */
+.code-lint-tooltip {
+  position: absolute;
+  z-index: 25;
+  max-width: min(36rem, 80ch);
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: color-mix(in srgb, var(--bg-elevated, #1a1612) 92%, var(--wood) 8%);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  pointer-events: none;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  white-space: pre-wrap;
+}
+
+.code-lint-tooltip-error {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line-strong));
+}
+
+.code-lint-tooltip-warning {
+  border-color: color-mix(in srgb, var(--wood-bright) 55%, var(--line-strong));
+}
+
 /*
  * Lint gutter lives in the left padding of .code-surface — does not change 80ch width.
  * Scroll position synced from the textarea (same as .code-highlight).
@@ -734,6 +767,8 @@ html.is-desktop .workspace {
   margin-left: -3px;
   border-radius: 50%;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  /* Gutter is pointer-events:none; markers opt back in for native title tooltips. */
+  pointer-events: auto;
 }
 
 .code-lint-marker-error {

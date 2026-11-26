@@ -248,6 +248,7 @@ export default function App() {
             index={index}
             total={total}
             language={state.language}
+            rLintEnabled={state.rLintEnabled}
             env={state.env}
             kernelHint={
               state.language === 'r'
@@ -389,10 +390,12 @@ export default function App() {
           kernelAvailable={state.kernelStatus.available}
           kernelMessage={state.kernelStatus.message}
           helperDock={state.helperDock}
+          rLintEnabled={state.rLintEnabled}
           onClose={closePalette}
           onRun={runPaletteCommand}
           onSetRscriptPath={api.setRscriptPath}
           onSetHelperDock={api.setHelperDock}
+          onSetRLintEnabled={api.setRLintEnabled}
         />
       ) : null}
     </div>

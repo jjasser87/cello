@@ -145,6 +145,8 @@ export interface WorkspaceState {
   sidePanelOpen: boolean
   /** Ribbon helpers dock relative to the editor (app setting; default right). */
   helperDock: HelperDock
+  /** Client-side R structural lint (app setting; default off). */
+  rLintEnabled: boolean
   language: KernelLanguage
   kernelStatus: {
     available: boolean

@@ -5,7 +5,8 @@
  * ```json
  * {
  *   "rscriptPath": "/usr/local/bin/Rscript" | null,
- *   "helperDock": "left" | "right" | "top" | "bottom"
+ *   "helperDock": "left" | "right" | "top" | "bottom",
+ *   "rLintEnabled": false
  * }
  * ```
  *
@@ -14,6 +15,9 @@
  *
  * `helperDock` places the ribbon panel cluster relative to the main editor
  * (default: right — helpers expand rightward).
+ *
+ * `rLintEnabled` toggles client-side R structural lint in the cell editor
+ * (default: off — opt-in; when on, prefer idle/soft diagnostics).
  */
 import type { HelperDock } from '../types'
 
@@ -24,11 +28,14 @@ const KEY = 'cello.settings.v0'
 export type AppSettings = {
   rscriptPath: string | null
   helperDock: HelperDock
+  /** Client-side R structural lint (parens / indent). Default off. */
+  rLintEnabled: boolean
 }
 
 const DEFAULTS: AppSettings = {
   rscriptPath: null,
   helperDock: 'right',
+  rLintEnabled: false,
 }
 
 const DOCKS: readonly HelperDock[] = ['right', 'left', 'top', 'bottom']
@@ -45,6 +52,10 @@ function normalizeHelperDock(value: unknown): HelperDock {
   return isHelperDock(value) ? value : DEFAULTS.helperDock
 }
 
+function normalizeRLintEnabled(value: unknown): boolean {
+  return typeof value === 'boolean' ? value : DEFAULTS.rLintEnabled
+}
+
 export function loadSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(KEY)
@@ -53,6 +64,7 @@ export function loadSettings(): AppSettings {
     return {
       rscriptPath: normalizeRscriptPath(parsed.rscriptPath),
       helperDock: normalizeHelperDock(parsed.helperDock),
+      rLintEnabled: normalizeRLintEnabled(parsed.rLintEnabled),
     }
   } catch {
     return { ...DEFAULTS }
@@ -70,6 +82,10 @@ export function saveSettings(partial: Partial<AppSettings>): AppSettings {
       partial.helperDock === undefined
         ? current.helperDock
         : normalizeHelperDock(partial.helperDock),
+    rLintEnabled:
+      partial.rLintEnabled === undefined
+        ? current.rLintEnabled
+        : normalizeRLintEnabled(partial.rLintEnabled),
   }
   try {
     localStorage.setItem(KEY, JSON.stringify(next))
