@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
-import { lintClassForRange, lintR } from './rLint.ts'
+import {
+  diagnosticAt,
+  lintClassForRange,
+  lintR,
+  matchDelimiterAt,
+} from './rLint.ts'
 
 describe('lintR delimiters', () => {
   it('accepts balanced parentheses, brackets, and braces', () => {
@@ -114,5 +119,56 @@ describe('lintClassForRange', () => {
     const open = diags.find((d) => d.kind === 'unmatched-open')
     assert.ok(open)
     assert.equal(lintClassForRange(diags, open!.from, open!.to), 'lint-error')
+  })
+})
+
+describe('lintR soft mode', () => {
+  it('skips unmatched opens, unclosed strings, and indent while soft', () => {
+    const code = 'f <- function(x) {\nx + 1\n' // missing close, bad indent, unfinished
+    const soft = lintR(code, { soft: true })
+    assert.equal(
+      soft.some((d) => d.kind === 'unmatched-open' || d.kind === 'indent' || d.kind === 'unclosed-string'),
+      false,
+    )
+    const full = lintR(code)
+    assert.ok(full.some((d) => d.kind === 'unmatched-open'))
+    assert.ok(full.some((d) => d.kind === 'indent'))
+  })
+
+  it('still flags mismatched and unexpected closers while soft', () => {
+    const mismatch = lintR('f(x]', { soft: true }).find((d) => d.kind === 'mismatch')
+    assert.ok(mismatch)
+    const unexpected = lintR('x <- 1)', { soft: true }).find((d) => d.kind === 'unmatched-close')
+    assert.ok(unexpected)
+  })
+})
+
+describe('matchDelimiterAt', () => {
+  it('matches balanced parentheses from opener or closer', () => {
+    const code = 'mean(c(1, 2))'
+    // caret on first '('
+    const fromOpen = matchDelimiterAt(code, code.indexOf('('))
+    assert.ok(fromOpen)
+    assert.equal(code.slice(fromOpen!.from, fromOpen!.to), '(')
+    assert.equal(code.slice(fromOpen!.matchFrom, fromOpen!.matchTo), ')')
+    // caret just after final ')'
+    const fromClose = matchDelimiterAt(code, code.length)
+    assert.ok(fromClose)
+    assert.equal(code.slice(fromClose!.from, fromClose!.to), ')')
+  })
+
+  it('returns null for unmatched open', () => {
+    assert.equal(matchDelimiterAt('mean(1', 4), null)
+  })
+})
+
+describe('diagnosticAt', () => {
+  it('returns the diagnostic covering an offset', () => {
+    const diags = lintR('x <- 1)')
+    const close = diags.find((d) => d.kind === 'unmatched-close')
+    assert.ok(close)
+    const hit = diagnosticAt(diags, close!.from)
+    assert.equal(hit?.message, "Unexpected ')'")
+    assert.equal(diagnosticAt(diags, 0), null)
   })
 })

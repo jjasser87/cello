@@ -90,6 +90,7 @@ function buildFromProject(
     activePanel: project.activePanel,
     sidePanelOpen: extras?.sidePanelOpen ?? false,
     helperDock: loadSettings().helperDock,
+    rLintEnabled: loadSettings().rLintEnabled,
     language: project.language,
     kernelStatus: extras?.kernelStatus ?? {
       available: false,
@@ -126,6 +127,7 @@ function buildFresh(language: KernelLanguage = 'r', name = defaultProjectName())
     activePanel: 'cells',
     sidePanelOpen: false,
     helperDock: loadSettings().helperDock,
+    rLintEnabled: loadSettings().rLintEnabled,
     language,
     kernelStatus: {
       available: false,
@@ -273,6 +275,7 @@ export function useWorkspace() {
       // App setting (also in localStorage settings); included so the object
       // satisfies WorkspaceState for saveWorkspace typing.
       helperDock: state.helperDock,
+      rLintEnabled: state.rLintEnabled,
       language: state.language,
       kernelStatus: state.kernelStatus,
       scriptPath: state.scriptPath,
@@ -304,6 +307,7 @@ export function useWorkspace() {
       state.activeCellId,
       state.activePanel,
       state.helperDock,
+      state.rLintEnabled,
       state.language,
       state.kernelStatus,
       state.scriptPath,
@@ -1637,6 +1641,11 @@ export function useWorkspace() {
     setState((prev) => ({ ...prev, helperDock: saved.helperDock }))
   }, [])
 
+  const setRLintEnabled = useCallback((rLintEnabled: boolean) => {
+    const saved = saveSettings({ rLintEnabled })
+    setState((prev) => ({ ...prev, rLintEnabled: saved.rLintEnabled }))
+  }, [])
+
   return {
     state,
     activeCell,
@@ -1655,6 +1664,7 @@ export function useWorkspace() {
     setLanguage,
     setRscriptPath,
     setHelperDock,
+    setRLintEnabled,
     newProject,
     openProjectJson,
     openFolder,

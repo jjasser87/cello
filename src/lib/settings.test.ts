@@ -37,9 +37,13 @@ describe('app settings', () => {
     delete globalThis.localStorage
   })
 
-  it('defaults helperDock to right and rscriptPath to null', async () => {
+  it('defaults helperDock to right, rLintEnabled off, rscriptPath null', async () => {
     const { loadSettings } = await import('./settings.ts')
-    assert.deepEqual(loadSettings(), { rscriptPath: null, helperDock: 'right' })
+    assert.deepEqual(loadSettings(), {
+      rscriptPath: null,
+      helperDock: 'right',
+      rLintEnabled: false,
+    })
   })
 
   it('persists and restores helperDock', async () => {
@@ -67,6 +71,26 @@ describe('app settings', () => {
     assert.deepEqual(loadSettings(), {
       rscriptPath: '/opt/R/bin/Rscript',
       helperDock: 'left',
+      rLintEnabled: false,
     })
+  })
+
+  it('persists rLintEnabled (default off)', async () => {
+    const { loadSettings, saveSettings } = await import('./settings.ts')
+    assert.equal(loadSettings().rLintEnabled, false)
+    const saved = saveSettings({ rLintEnabled: true })
+    assert.equal(saved.rLintEnabled, true)
+    assert.equal(loadSettings().rLintEnabled, true)
+    saveSettings({ rLintEnabled: false })
+    assert.equal(loadSettings().rLintEnabled, false)
+  })
+
+  it('defaults missing rLintEnabled to off when loading legacy settings', async () => {
+    const { loadSettings } = await import('./settings.ts')
+    localStorage.setItem(
+      'cello.settings.v0',
+      JSON.stringify({ rscriptPath: null, helperDock: 'right' }),
+    )
+    assert.equal(loadSettings().rLintEnabled, false)
   })
 })

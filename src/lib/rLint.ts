@@ -143,9 +143,19 @@ function indentUnits(stack: OpenFrame[], forLine0: number): number {
   return units
 }
 
+export type LintROptions = {
+  /**
+   * Soft / mid-edit mode (RStudio-like comfort):
+   * keep clear delimiter mistakes (mismatch, unexpected close) but skip
+   * unfinished-code noise — unmatched opens, unclosed strings, indent.
+   */
+  soft?: boolean
+}
+
 /** Lint R source for delimiter and indentation issues. */
-export function lintR(code: string): RDiagnostic[] {
+export function lintR(code: string, options: LintROptions = {}): RDiagnostic[] {
   if (!code) return []
+  const soft = Boolean(options.soft)
 
   const lines = code.split('\n')
   const lineStarts: number[] = [0]
@@ -222,74 +232,182 @@ export function lintR(code: string): RDiagnostic[] {
     }
   })
 
-  for (const frame of stack) {
-    delimiterDiagnostics.push({
-      from: frame.from,
-      to: frame.from + 1,
-      line: frame.line + 1,
-      col: frame.col,
-      severity: 'error',
-      kind: 'unmatched-open',
-      message: `Unmatched '${frame.ch}' — missing '${PAIRS[frame.ch]}'`,
-    })
+  // Soft mode: unfinished opens are normal while typing — defer until idle.
+  if (!soft) {
+    for (const frame of stack) {
+      delimiterDiagnostics.push({
+        from: frame.from,
+        to: frame.from + 1,
+        line: frame.line + 1,
+        col: frame.col,
+        severity: 'error',
+        kind: 'unmatched-open',
+        message: `Unmatched '${frame.ch}' — missing '${PAIRS[frame.ch]}'`,
+      })
+    }
   }
 
   const indentDiagnostics: RDiagnostic[] = []
-  for (let li = 0; li < lines.length; li += 1) {
-    const text = lines[li]
-    if (text.length === 0) continue
-    const nonSpace = text.search(/\S/)
-    if (nonSpace < 0) continue
+  // Soft mode: skip indent / unclosed-string noise mid-edit (RStudio-like).
+  if (!soft) {
+    for (let li = 0; li < lines.length; li += 1) {
+      const text = lines[li]
+      if (text.length === 0) continue
+      const nonSpace = text.search(/\S/)
+      if (nonSpace < 0) continue
 
-    const leading = text.slice(0, nonSpace)
-    const from = lineStarts[li] ?? 0
+      const leading = text.slice(0, nonSpace)
+      const from = lineStarts[li] ?? 0
 
-    if (leading.includes('\t') && leading.includes(' ')) {
-      indentDiagnostics.push({
-        from,
-        to: from + nonSpace,
-        line: li + 1,
-        col: 1,
-        severity: 'warning',
-        kind: 'mixed-indent',
-        message: 'Mixed tabs and spaces in indentation',
-      })
-    } else if (leading.includes('\t')) {
-      indentDiagnostics.push({
-        from,
-        to: from + nonSpace,
-        line: li + 1,
-        col: 1,
-        severity: 'warning',
-        kind: 'mixed-indent',
-        message: 'Use spaces for indentation (2 spaces), not tabs',
-      })
-    }
+      if (leading.includes('\t') && leading.includes(' ')) {
+        indentDiagnostics.push({
+          from,
+          to: from + nonSpace,
+          line: li + 1,
+          col: 1,
+          severity: 'warning',
+          kind: 'mixed-indent',
+          message: 'Mixed tabs and spaces in indentation',
+        })
+      } else if (leading.includes('\t')) {
+        indentDiagnostics.push({
+          from,
+          to: from + nonSpace,
+          line: li + 1,
+          col: 1,
+          severity: 'warning',
+          kind: 'mixed-indent',
+          message: 'Use spaces for indentation (2 spaces), not tabs',
+        })
+      }
 
-    // Comment-only lines: skip indent level checks (RStudio is lenient).
-    if (text[nonSpace] === '#') continue
+      // Comment-only lines: skip indent level checks (RStudio is lenient).
+      if (text[nonSpace] === '#') continue
 
-    const actual = leading.length
-    const expected = expectedIndent[li] ?? 0
-    if (actual !== expected) {
-      indentDiagnostics.push({
-        from,
-        to: from + Math.max(nonSpace, 1),
-        line: li + 1,
-        col: 1,
-        severity: 'warning',
-        kind: 'indent',
-        message:
-          expected === 0
-            ? `Incorrect indentation — expected no indent, found ${actual}`
-            : `Incorrect indentation — expected ${expected} spaces, found ${actual}`,
-      })
+      const actual = leading.length
+      const expected = expectedIndent[li] ?? 0
+      if (actual !== expected) {
+        indentDiagnostics.push({
+          from,
+          to: from + Math.max(nonSpace, 1),
+          line: li + 1,
+          col: 1,
+          severity: 'warning',
+          kind: 'indent',
+          message:
+            expected === 0
+              ? `Incorrect indentation — expected no indent, found ${actual}`
+              : `Incorrect indentation — expected ${expected} spaces, found ${actual}`,
+        })
+      }
     }
   }
 
-  const all = [...stringDiagnostics, ...delimiterDiagnostics, ...indentDiagnostics]
+  const strings = soft ? [] : stringDiagnostics
+  const all = [...strings, ...delimiterDiagnostics, ...indentDiagnostics]
   all.sort((a, b) => a.from - b.from || a.to - b.to)
   return all
+}
+
+/**
+ * Find the matching delimiter for the character under / just before `offset`
+ * (RStudio-style brace match). Returns both ends, or null if none.
+ */
+export function matchDelimiterAt(
+  code: string,
+  offset: number,
+): { from: number; to: number; matchFrom: number; matchTo: number } | null {
+  if (!code) return null
+  // Prefer the char under the caret; if that is not a delimiter, try the char before
+  // (common when the caret sits just after `)`).
+  const candidates: number[] = []
+  if (offset >= 0 && offset < code.length) candidates.push(offset)
+  if (offset > 0) candidates.push(offset - 1)
+
+  let target = -1
+  let targetCh = ''
+  for (const at of candidates) {
+    const ch = code[at]
+    if (OPENERS.has(ch) || CLOSERS.has(ch)) {
+      // Skip if this char sits inside a string/comment — cheap scan.
+      if (isCodeDelimiter(code, at)) {
+        target = at
+        targetCh = ch
+        break
+      }
+    }
+  }
+  if (target < 0) return null
+
+  if (OPENERS.has(targetCh)) {
+    const want = PAIRS[targetCh]
+    let depth = 0
+    let found = -1
+    walkCode(code, (ch, index) => {
+      if (found >= 0) return
+      if (index < target) return
+      if (OPENERS.has(ch)) {
+        depth += 1
+        return
+      }
+      if (CLOSERS.has(ch)) {
+        if (depth === 0) return
+        depth -= 1
+        if (depth === 0 && index > target) {
+          if (ch === want) found = index
+        }
+      }
+    })
+    if (found < 0) return null
+    return { from: target, to: target + 1, matchFrom: found, matchTo: found + 1 }
+  }
+
+  // Closer → stack over the prefix *before* this closer.
+  const wantOpen = Object.entries(PAIRS).find(([, c]) => c === targetCh)?.[0]
+  if (!wantOpen) return null
+  const opens: { ch: string; index: number }[] = []
+  walkCode(code, (ch, index) => {
+    if (index >= target) return
+    if (OPENERS.has(ch)) {
+      opens.push({ ch, index })
+      return
+    }
+    if (CLOSERS.has(ch)) {
+      const top = opens[opens.length - 1]
+      if (top && PAIRS[top.ch] === ch) opens.pop()
+    }
+  })
+  const match = opens[opens.length - 1]
+  if (!match || match.ch !== wantOpen) return null
+  return { from: target, to: target + 1, matchFrom: match.index, matchTo: match.index + 1 }
+}
+
+/** True when `index` is a delimiter outside strings/comments. */
+function isCodeDelimiter(code: string, index: number): boolean {
+  let hit = false
+  walkCode(code, (_ch, i) => {
+    if (i === index) hit = true
+  })
+  return hit
+}
+
+/** Diagnostic covering offset (prefer error; then shortest range). */
+export function diagnosticAt(
+  diagnostics: readonly RDiagnostic[],
+  offset: number,
+): RDiagnostic | null {
+  let best: RDiagnostic | null = null
+  for (const d of diagnostics) {
+    if (offset < d.from || offset >= d.to) continue
+    if (
+      !best ||
+      (best.severity !== 'error' && d.severity === 'error') ||
+      (best.severity === d.severity && d.to - d.from < best.to - d.from)
+    ) {
+      best = d
+    }
+  }
+  return best
 }
 
 /**

@@ -362,28 +362,65 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
+export interface HighlightRange {
+  from: number
+  to: number
+}
+
+export interface HighlightOptions {
+  diagnostics?: readonly RDiagnostic[]
+  /** Matching delimiter ranges (RStudio-style brace match). */
+  matchRanges?: readonly HighlightRange[]
+}
+
+function overlapsMatch(
+  ranges: readonly HighlightRange[] | undefined,
+  from: number,
+  to: number,
+): boolean {
+  if (!ranges) return false
+  for (const r of ranges) {
+    if (r.from < to && r.to > from) return true
+  }
+  return false
+}
+
 /**
- * Emit one token, optionally wrapping sub-ranges that overlap lint diagnostics.
- * Keeps syntax `tok-*` classes and adds `tok-lint-error` / `tok-lint-warning`.
+ * Emit one token, optionally wrapping sub-ranges that overlap lint diagnostics
+ * or matching-paren ranges.
+ * Keeps syntax `tok-*` classes and adds `tok-lint-*` / `tok-match-paren`.
  */
 function emitTokenHtml(
   token: Token,
   offset: number,
-  diagnostics: readonly RDiagnostic[] | undefined,
+  options: HighlightOptions | undefined,
 ): string {
   const text = token.text
-  if (!diagnostics || diagnostics.length === 0 || text.length === 0) {
+  const diagnostics = options?.diagnostics
+  const matchRanges = options?.matchRanges
+  const hasExtras =
+    (diagnostics && diagnostics.length > 0) || (matchRanges && matchRanges.length > 0)
+  if (!hasExtras || text.length === 0) {
     const escaped = escapeHtml(text)
     return token.kind === 'plain' ? escaped : `<span class="tok-${token.kind}">${escaped}</span>`
   }
 
-  // Split at every diagnostic edge that falls inside this token.
+  // Split at every diagnostic / match edge that falls inside this token.
   const end = offset + text.length
   const cuts = new Set<number>([0, text.length])
-  for (const d of diagnostics) {
-    if (d.to <= offset || d.from >= end) continue
-    cuts.add(Math.max(0, d.from - offset))
-    cuts.add(Math.min(text.length, d.to - offset))
+  if (diagnostics) {
+    for (const d of diagnostics) {
+      if (d.to <= offset || d.from >= end) continue
+      cuts.add(Math.max(0, d.from - offset))
+      cuts.add(Math.min(text.length, d.to - offset))
+    }
+  }
+  if (matchRanges) {
+    for (const r of matchRanges) {
+      if (r.to <= offset || r.from >= end) continue
+      cuts.add(Math.max(0, r.from - offset))
+      cuts.add(Math.min(text.length, r.to - offset))
+    }
   }
   const points = [...cuts].sort((a, b) => a - b)
 
@@ -394,10 +431,14 @@ function emitTokenHtml(
     if (a === b) continue
     const slice = text.slice(a, b)
     const escaped = escapeHtml(slice)
-    const lint = lintClassForRange(diagnostics, offset + a, offset + b)
+    const lint = diagnostics
+      ? lintClassForRange(diagnostics, offset + a, offset + b)
+      : null
+    const matched = overlapsMatch(matchRanges, offset + a, offset + b)
     const classes: string[] = []
     if (token.kind !== 'plain') classes.push(`tok-${token.kind}`)
     if (lint) classes.push(`tok-${lint}`)
+    if (matched) classes.push('tok-match-paren')
     if (classes.length === 0) {
       html += escaped
     } else {
@@ -407,17 +448,31 @@ function emitTokenHtml(
   return html
 }
 
+function isHighlightOptions(
+  value: readonly RDiagnostic[] | HighlightOptions,
+): value is HighlightOptions {
+  return !Array.isArray(value)
+}
+
 /** Render highlighted HTML for the overlay layer (escaped text + span tokens). */
 export function highlightHtml(
   code: string,
   language: KernelLanguage,
-  diagnostics?: readonly RDiagnostic[],
+  diagnosticsOrOptions?: readonly RDiagnostic[] | HighlightOptions,
 ): string {
+  let options: HighlightOptions | undefined
+  if (diagnosticsOrOptions == null) {
+    options = undefined
+  } else if (isHighlightOptions(diagnosticsOrOptions)) {
+    options = diagnosticsOrOptions
+  } else {
+    options = { diagnostics: diagnosticsOrOptions }
+  }
   const tokens = tokenize(code, language)
   let html = ''
   let offset = 0
   for (const token of tokens) {
-    html += emitTokenHtml(token, offset, diagnostics)
+    html += emitTokenHtml(token, offset, options)
     offset += token.text.length
   }
   // Preserve a trailing newline so the <pre> height matches the textarea

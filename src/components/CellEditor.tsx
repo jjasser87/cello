@@ -7,7 +7,12 @@ import {
   tokenBeforeCursor,
   type CompletionItem,
 } from '../lib/rCompletions'
-import { lintR, type RDiagnostic } from '../lib/rLint'
+import {
+  diagnosticAt,
+  lintR,
+  matchDelimiterAt,
+  type RDiagnostic,
+} from '../lib/rLint'
 import type { Cell, EnvBinding, KernelLanguage } from '../types'
 
 interface CellEditorProps {
@@ -15,6 +20,8 @@ interface CellEditorProps {
   index: number
   total: number
   language: KernelLanguage
+  /** Settings: client-side R structural lint (default off). */
+  rLintEnabled?: boolean
   /** Cached Env bindings — used for soft-fail completions when R is down. */
   env?: EnvBinding[]
   /** Short kernel label shown in the nav row (keep brief). */
@@ -32,6 +39,14 @@ interface CellEditorProps {
   sidePanel: ReactNode
 }
 
+interface LintHoverState {
+  cellId: string
+  message: string
+  severity: 'error' | 'warning'
+  top: number
+  left: number
+}
+
 interface PopupState {
   cellId: string
   items: CompletionItem[]
@@ -43,12 +58,15 @@ interface PopupState {
 }
 
 const COMPLETE_DEBOUNCE_MS = 120
+/** Idle pause before full (indent / unmatched-open) lint — RStudio-like comfort. */
+const LINT_IDLE_MS = 550
 
 export function CellEditor({
   cell,
   index,
   total,
   language,
+  rLintEnabled = false,
   env = [],
   kernelHint,
   kernelDetail,
@@ -65,8 +83,22 @@ export function CellEditor({
   const lintGutterRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lintIdleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestGen = useRef(0)
   const [popup, setPopup] = useState<PopupState | null>(null)
+  /**
+   * Soft while typing; full after idle/blur when lint is enabled.
+   * cellId gates stale soft mode after cell jumps (no setState-in-effect).
+   */
+  const [lintGate, setLintGate] = useState<{ cellId: string; mode: 'soft' | 'full' }>({
+    cellId: cell.id,
+    mode: 'full',
+  })
+  const lintMode = lintGate.cellId === cell.id ? lintGate.mode : 'full'
+  const [caretOffset, setCaretOffset] = useState(0)
+  const [lintHover, setLintHover] = useState<LintHoverState | null>(null)
+  const visibleLintHover =
+    lintHover && lintHover.cellId === cell.id && rLintEnabled ? lintHover : null
   // Shade cues track textarea overflow; contentKey covers value-driven growth.
   const { moreBelow, moreRight } = useOverflowFade(ref, `${cell.id}:${cell.code}`)
 
@@ -102,6 +134,7 @@ export function CellEditor({
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      if (lintIdleRef.current) clearTimeout(lintIdleRef.current)
     }
   }, [])
 
@@ -112,6 +145,19 @@ export function CellEditor({
       : null
 
   const dismissPopup = () => setPopup(null)
+
+  const scheduleFullLint = () => {
+    if (lintIdleRef.current) clearTimeout(lintIdleRef.current)
+    lintIdleRef.current = setTimeout(() => {
+      setLintGate({ cellId: cell.id, mode: 'full' })
+    }, LINT_IDLE_MS)
+  }
+
+  const noteTypingForLint = () => {
+    if (!rLintEnabled || language !== 'r') return
+    setLintGate({ cellId: cell.id, mode: 'soft' })
+    scheduleFullLint()
+  }
 
   const applyCompletion = (item: CompletionItem, prefix: string) => {
     const el = ref.current
@@ -281,17 +327,28 @@ export function CellEditor({
   }
 
   // Client-side R lint (parens / brackets / indent) — never blocks Run.
-  const diagnostics = useMemo(
-    () => (language === 'r' ? lintR(cell.code) : []),
-    [language, cell.code],
-  )
+  // Soft while typing; full after idle/blur. Off entirely when setting disabled.
+  const diagnostics = useMemo(() => {
+    if (language !== 'r' || !rLintEnabled) return [] as RDiagnostic[]
+    return lintR(cell.code, { soft: lintMode === 'soft' })
+  }, [language, rLintEnabled, cell.code, lintMode])
+
+  // Matching paren highlight at the caret — always on for R (not gated by lint).
+  const matchRanges = useMemo(() => {
+    if (language !== 'r') return []
+    const match = matchDelimiterAt(cell.code, caretOffset)
+    if (!match) return []
+    return [
+      { from: match.from, to: match.to },
+      { from: match.matchFrom, to: match.matchTo },
+    ]
+  }, [language, cell.code, caretOffset])
 
   // Dual-layer highlight: colored <pre> under a transparent textarea (same metrics).
-  const highlighted = highlightHtml(
-    cell.code,
-    language,
-    language === 'r' ? diagnostics : undefined,
-  )
+  const highlighted = highlightHtml(cell.code, language, {
+    diagnostics: language === 'r' && rLintEnabled ? diagnostics : undefined,
+    matchRanges: language === 'r' ? matchRanges : undefined,
+  })
 
   const lintMarkers = useMemo(
     () => buildLintMarkers(diagnostics, cell.code),
@@ -304,6 +361,56 @@ export function CellEditor({
     const gutter = lintGutterRef.current
     if (el && gutter) gutter.scrollTop = el.scrollTop
   }, [lintMarkers.length, cell.code])
+
+  /** Map pointer position over the transparent textarea to a source offset. */
+  const offsetFromPointer = (el: HTMLTextAreaElement, clientX: number, clientY: number) => {
+    const style = window.getComputedStyle(el)
+    const lineHeight = Number.parseFloat(style.lineHeight) || 22
+    const paddingTop = Number.parseFloat(style.paddingTop) || 0
+    const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
+    const rect = el.getBoundingClientRect()
+    const ch = el.clientWidth / 80
+    const x = clientX - rect.left + el.scrollLeft - paddingLeft
+    const y = clientY - rect.top + el.scrollTop - paddingTop
+    const row = Math.max(0, Math.floor(y / lineHeight))
+    const col = Math.max(0, Math.floor(x / Math.max(ch, 1)))
+    const lines = el.value.split('\n')
+    let offset = 0
+    for (let i = 0; i < lines.length; i += 1) {
+      if (i === row) {
+        return offset + Math.min(col, lines[i].length)
+      }
+      offset += lines[i].length + 1
+    }
+    return el.value.length
+  }
+
+  const updateLintHover = (el: HTMLTextAreaElement, clientX: number, clientY: number) => {
+    if (!rLintEnabled || language !== 'r' || diagnostics.length === 0) {
+      setLintHover(null)
+      return
+    }
+    const offset = offsetFromPointer(el, clientX, clientY)
+    const hit = diagnosticAt(diagnostics, offset)
+    if (!hit) {
+      setLintHover(null)
+      return
+    }
+    const rect = el.getBoundingClientRect()
+    const frame = frameRef.current?.getBoundingClientRect()
+    const top = clientY - (frame?.top ?? rect.top) + 18
+    const left = Math.min(
+      Math.max(8, clientX - (frame?.left ?? rect.left) + 12),
+      (frame?.width ?? rect.width) - 16,
+    )
+    setLintHover({
+      cellId: cell.id,
+      message: hit.message,
+      severity: hit.severity,
+      top,
+      left,
+    })
+  }
 
   return (
     <section className="cell-editor" aria-label={`Editing ${cell.name}`}>
@@ -368,6 +475,9 @@ export function CellEditor({
               onScroll={syncHighlightScroll}
               onChange={(event) => {
                 onChange(event.target.value)
+                setCaretOffset(event.target.selectionStart)
+                noteTypingForLint()
+                setLintHover(null)
                 if (language !== 'r') {
                   dismissPopup()
                   return
@@ -381,7 +491,23 @@ export function CellEditor({
                   scheduleCompletions()
                 }
               }}
+              onSelect={(event) => {
+                setCaretOffset(event.currentTarget.selectionStart)
+              }}
+              onKeyUp={(event) => {
+                setCaretOffset(event.currentTarget.selectionStart)
+              }}
+              onMouseMove={(event) => {
+                updateLintHover(event.currentTarget, event.clientX, event.clientY)
+              }}
+              onMouseLeave={() => setLintHover(null)}
               onBlur={() => {
+                // Full lint when leaving the cell — finished-code check.
+                if (rLintEnabled && language === 'r') {
+                  if (lintIdleRef.current) clearTimeout(lintIdleRef.current)
+                  setLintGate({ cellId: cell.id, mode: 'full' })
+                }
+                setLintHover(null)
                 // Delay so a mousedown on a completion item can fire first.
                 window.setTimeout(() => {
                   if (document.activeElement !== ref.current) dismissPopup()
@@ -470,6 +596,18 @@ export function CellEditor({
             <div className="code-surface-fade code-surface-fade-y" aria-hidden="true" />
             <div className="code-surface-fade code-surface-fade-x" aria-hidden="true" />
           </div>
+          {visibleLintHover ? (
+            <div
+              className={`code-lint-tooltip code-lint-tooltip-${visibleLintHover.severity}`}
+              role="tooltip"
+              style={{
+                top: visibleLintHover.top,
+                left: Math.min(visibleLintHover.left, 520),
+              }}
+            >
+              {visibleLintHover.message}
+            </div>
+          ) : null}
           {visiblePopup ? (
             <ul
               id="r-completion-list"
