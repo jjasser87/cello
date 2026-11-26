@@ -686,6 +686,125 @@ html.is-desktop .workspace {
   color: var(--tok-punctuation);
 }
 
+/* R structural lint — wavy underline on the highlight layer (cello-wood / danger). */
+.tok-lint-error {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+.tok-lint-warning {
+  text-decoration: underline wavy var(--wood-bright);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+
+/*
+ * Lint gutter lives in the left padding of .code-surface — does not change 80ch width.
+ * Scroll position synced from the textarea (same as .code-highlight).
+ */
+.code-lint-gutter {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--cell-pad-x);
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  scrollbar-width: none;
+}
+
+.code-lint-gutter::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.code-lint-gutter-inner {
+  position: relative;
+  width: 100%;
+}
+
+.code-lint-marker {
+  position: absolute;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  margin-left: -3px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+.code-lint-marker-error {
+  background: var(--danger);
+}
+
+.code-lint-marker-warning {
+  background: var(--wood-bright);
+}
+
+/* Compact lint strip under the writing surface — advisory only; Run still works. */
+.cell-lint {
+  margin: 0.45rem 0 0;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(196, 138, 58, 0.06);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+
+.cell-lint-summary {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--wood-bright);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.cell-lint-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cell-lint-item {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  padding: 0.1rem 0;
+}
+
+.cell-lint-loc {
+  flex: 0 0 auto;
+  color: var(--muted);
+  min-width: 3.6rem;
+}
+
+.cell-lint-msg {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-lint-item.cell-lint-error .cell-lint-msg {
+  color: #e8a090;
+}
+
+.cell-lint-item.cell-lint-warning .cell-lint-msg {
+  color: var(--ink-soft);
+}
+
+.cell-lint-more {
+  color: var(--muted);
+  padding-top: 0.15rem;
+}
+
 /* R completion popup — floats over the writing surface; no scrollbar chrome. */
 .r-completion-popup {
   position: absolute;

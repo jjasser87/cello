@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
 import { highlightHtml, tokenize } from './highlight.ts'
+import { lintR } from './rLint.ts'
 
 describe('tokenize R', () => {
   it('colors comments, strings, keywords, builtins, and assignment', () => {
@@ -56,5 +57,12 @@ describe('highlightHtml', () => {
   it('preserves a trailing newline for layout parity', () => {
     const html = highlightHtml('x\n', 'r')
     assert.ok(html.endsWith('\n'))
+  })
+
+  it('wraps lint diagnostic ranges with tok-lint-* classes', () => {
+    const code = 'mean(c(1'
+    const diags = lintR(code)
+    const html = highlightHtml(code, 'r', diags)
+    assert.ok(html.includes('tok-lint-error'), html)
   })
 })

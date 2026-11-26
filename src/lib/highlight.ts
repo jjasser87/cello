@@ -1,4 +1,5 @@
 import type { KernelLanguage } from '../types'
+import { lintClassForRange, type RDiagnostic } from './rLint.ts'
 
 /** Token kinds used by the cell editor highlight layer. */
 export type TokenKind =
@@ -361,17 +362,63 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-/** Render highlighted HTML for the overlay layer (escaped text + span tokens). */
-export function highlightHtml(code: string, language: KernelLanguage): string {
-  const tokens = tokenize(code, language)
+/**
+ * Emit one token, optionally wrapping sub-ranges that overlap lint diagnostics.
+ * Keeps syntax `tok-*` classes and adds `tok-lint-error` / `tok-lint-warning`.
+ */
+function emitTokenHtml(
+  token: Token,
+  offset: number,
+  diagnostics: readonly RDiagnostic[] | undefined,
+): string {
+  const text = token.text
+  if (!diagnostics || diagnostics.length === 0 || text.length === 0) {
+    const escaped = escapeHtml(text)
+    return token.kind === 'plain' ? escaped : `<span class="tok-${token.kind}">${escaped}</span>`
+  }
+
+  // Split at every diagnostic edge that falls inside this token.
+  const end = offset + text.length
+  const cuts = new Set<number>([0, text.length])
+  for (const d of diagnostics) {
+    if (d.to <= offset || d.from >= end) continue
+    cuts.add(Math.max(0, d.from - offset))
+    cuts.add(Math.min(text.length, d.to - offset))
+  }
+  const points = [...cuts].sort((a, b) => a - b)
+
   let html = ''
-  for (const token of tokens) {
-    const escaped = escapeHtml(token.text)
-    if (token.kind === 'plain') {
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i]
+    const b = points[i + 1]
+    if (a === b) continue
+    const slice = text.slice(a, b)
+    const escaped = escapeHtml(slice)
+    const lint = lintClassForRange(diagnostics, offset + a, offset + b)
+    const classes: string[] = []
+    if (token.kind !== 'plain') classes.push(`tok-${token.kind}`)
+    if (lint) classes.push(`tok-${lint}`)
+    if (classes.length === 0) {
       html += escaped
     } else {
-      html += `<span class="tok-${token.kind}">${escaped}</span>`
+      html += `<span class="${classes.join(' ')}">${escaped}</span>`
     }
+  }
+  return html
+}
+
+/** Render highlighted HTML for the overlay layer (escaped text + span tokens). */
+export function highlightHtml(
+  code: string,
+  language: KernelLanguage,
+  diagnostics?: readonly RDiagnostic[],
+): string {
+  const tokens = tokenize(code, language)
+  let html = ''
+  let offset = 0
+  for (const token of tokens) {
+    html += emitTokenHtml(token, offset, diagnostics)
+    offset += token.text.length
   }
   // Preserve a trailing newline so the <pre> height matches the textarea
   // (browsers collapse a final bare newline inside <pre>).
